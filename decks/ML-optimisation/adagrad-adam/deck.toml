@@ -1,0 +1,17 @@
+date = "2026-06-15"
+entrypoints = [
+  "slides.intro:Intro",
+  "slides.rosenbrock_momentum:MomentumRosenbrock",
+  "slides.intro:KeyIdea",
+]
+order = 1000
+slug = "adagrad-adam"
+summary = "Replace with a one-line description."
+tags = []
+title = "AdaGrad & ADAM"
+
+[slide_themes]
+dark = "simplex_dark"
+default = "dark"
+enabled = true
+light = "simplex_light"
