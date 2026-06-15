@@ -1,6 +1,6 @@
-# My Lectures
+# Provably Optimal
 
-Starter repository for a Manim lecture site built with
+Starter repository for a Manim blog and lecture site built with
 [Simplex](https://github.com/shlomi-perles/simplex). This repo is an
 application template, not a Python package to publish: you write decks under
 `decks/`, Simplex renders them with Manim, and GitHub Actions publishes the

@@ -1,5 +1,5 @@
-brand = "My Lectures"
-tagline = "Replace this with your tagline."
+brand = "Provably Optimal"
+tagline = "Notes on mathematics, optimization, and computation."
 
 nav = [
     { label = "Decks", href = "/" },

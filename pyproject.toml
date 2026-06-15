@@ -1,7 +1,7 @@
 [project]
-name = "my-lectures"
+name = "provably-optimal"
 version = "0.0.0"
-description = "Lectures site built with Simplex."
+description = "Provably Optimal blog built with Simplex."
 requires-python = ">=3.13"
 dependencies = [
     "manim-simplex>=0.14.0",
