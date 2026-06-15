@@ -1,0 +1,17 @@
+[project]
+name = "my-lectures"
+version = "0.0.0"
+description = "Lectures site built with Simplex."
+requires-python = ">=3.13"
+dependencies = [
+    "manim-simplex>=0.14.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.0",
+    "ruff>=0.15.12",
+]
+
+[tool.uv]
+package = false

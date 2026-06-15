@@ -1,0 +1,18 @@
+ci:
+  autofix_commit_msg: |
+    chore(fmt): auto fixes from pre-commit.com hooks
+
+    for more information, see https://pre-commit.ci
+  autoupdate_commit_msg: 'chore(deps): pre-commit autoupdate'
+
+default_stages:
+  - pre-commit
+  - pre-push
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.14
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format

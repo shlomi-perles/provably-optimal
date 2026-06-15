@@ -1,0 +1,10 @@
+target-version = "py313"
+line-length = 100
+
+[lint]
+select = ["E", "W", "F", "I", "N", "B", "UP", "SIM", "TID", "PTH", "RUF"]
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+"decks/**/slides.py" = ["E402", "F401", "F403", "F405", "N801", "N802", "N803", "N806", "I001", "PLR2004", "T201", "S101"]
+"decks/**/slides/**/*.py" = ["E402", "F401", "F403", "F405", "N801", "N802", "N803", "N806", "I001", "PLR2004", "T201", "S101"]

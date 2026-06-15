@@ -1,0 +1,12 @@
+brand = "My Lectures"
+tagline = "Replace this with your tagline."
+
+nav = [
+    { label = "Decks", href = "/" },
+]
+
+[slide_themes]
+enabled = true
+dark = "simplex_dark"
+light = "simplex_light"
+default = "dark"

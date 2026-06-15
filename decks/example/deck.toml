@@ -1,0 +1,12 @@
+slug = "example"
+title = "Example Deck"
+summary = "A starter deck. Delete me and run `simplex new` to scaffold your own."
+tags = ["intro"]
+order = 0
+entrypoints = ["slides.intro:Intro", "slides.intro:KeyIdea"]
+
+[slide_themes]
+enabled = true
+dark = "simplex_dark"
+light = "simplex_light"
+default = "dark"
