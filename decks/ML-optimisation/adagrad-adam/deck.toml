@@ -1,8 +1,8 @@
 date = "2026-06-15"
 entrypoints = [
-  "slides.intro:Intro",
-  "slides.rosenbrock_momentum:MomentumRosenbrock",
-  "slides.intro:KeyIdea",
+    "slides.intro:Intro",
+    "slides.rosenbrock_momentum:MomentumRosenbrock",
+    "slides.intro:KeyIdea",
 ]
 order = 1000
 slug = "adagrad-adam"
