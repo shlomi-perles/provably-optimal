@@ -78,8 +78,6 @@ class MomentumRosenbrock(Slide):
 
         title = Title(
             r"Momentum gradient descent on the Rosenbrock function",
-            font_size=theme.typography.h2,
-            include_underline=False,
         )
         self.region.place(title, UP)
         self.region.update(top=title)
