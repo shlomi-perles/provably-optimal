@@ -1,4 +1,4 @@
-"""Template scenes -- a title slide plus a second content slide."""
+"""Intro slide for the AdaGrad and Adam deck."""
 
 from manim import DOWN, ORIGIN, VGroup, Tex, Write, FadeIn
 
@@ -6,8 +6,8 @@ from simplex import SimplexScene, get_active_theme
 
 
 class Intro(SimplexScene):
-    title: str = "Hello, Simplex"
-    subtitle: str = r"$f(x) = e^{i\pi} + 1 = 0$"
+    title: str = "AdaGrad & Adam"
+    subtitle: str = r"Curvature, coordinates, and adaptive learning rates"
 
     def construct(self) -> None:
         self.slide(title=self.title)

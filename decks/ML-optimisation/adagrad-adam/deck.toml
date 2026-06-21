@@ -1,12 +1,19 @@
 date = "2026-06-15"
 entrypoints = [
     "slides.intro:Intro",
+    "slides.figures:SecondOrderApproximation",
+    "slides.figures:QuadraticRotation",
+    "slides.figures:GradientDescentModes",
     "slides.rosenbrock_momentum:MomentumRosenbrock",
-    "slides.intro:KeyIdea",
+    "slides.figures:AdaGradKnownRuler",
+    "slides.figures:AdaGradDiagonalScaling",
+    "slides.local_squeeze:AdaGradLocalSqueeze@opengl",
+    "slides.figures:AdaGradCoordinateResponse",
+    "slides.figures:AdaGradWeightedLedger",
 ]
 order = 1000
 slug = "adagrad-adam"
-summary = "Replace with a one-line description."
+summary = "Curvature, spectral gradient descent, and AdaGrad's coordinate-wise scaling."
 tags = []
 title = "AdaGrad & ADAM"
 
