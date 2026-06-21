@@ -46,7 +46,8 @@ ROSEN_CURVATURE = 20.0
 
 C_CONTOUR = "#91BBD0"
 C_FRAME = "#BFC9D2"
-C_OPTIMUM = "#4A6578"
+C_OPTIMUM = "#DDEAF2"
+C_OPTIMUM_STROKE = "#F6FBFF"
 C_PATH = "#FF6600"
 C_ALPHA = C_PATH
 C_BETA = "#2F65C8"
@@ -109,6 +110,7 @@ class MomentumRosenbrock(Slide):
             Write(frame),
             Write(markers),
         )
+        self.add_foreground_mobjects(markers)
         self.play(FadeIn(controls))
 
         self.next_slide()
@@ -176,8 +178,13 @@ class MomentumRosenbrock(Slide):
     def _make_static_markers(self, axes: Axes) -> VGroup:
         start = Dot(self._axes_point(axes, START), color=X_0_COLOR, radius=0.08)
         optimum = Dot(self._axes_point(axes, OPTIMUM), color=C_OPTIMUM, radius=0.08)
+        optimum.set_stroke(C_OPTIMUM_STROKE, width=2.0, opacity=0.95)
         optimum_halo = Circle(radius=0.2, color=C_OPTIMUM)
-        optimum_halo.set_fill(C_OPTIMUM, opacity=0.14).set_stroke(width=0)
+        optimum_halo.set_fill(C_OPTIMUM, opacity=0.16).set_stroke(
+            C_OPTIMUM_STROKE,
+            width=1.0,
+            opacity=0.35,
+        )
         optimum_halo.move_to(optimum)
 
         start_label = MathTex(r"x_0", color=X_0_COLOR, font_size=28)
