@@ -58,6 +58,11 @@ HEATMAP_MAX_ALPHA = 0.42
 STEP_DOT_RADIUS = 0.018
 HEAD_DOT_RADIUS = 0.07
 MAX_POINT_NORM = 1e3
+LAYER_HEATMAP = 0
+LAYER_CONTOUR = 1
+LAYER_TRAJECTORY = 2
+LAYER_FRAME = 2.5
+LAYER_MARKERS = 3
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +79,6 @@ class MomentumRosenbrock(Slide):
 
     def construct(self) -> None:
         self.next_slide(name="Momentum on Rosenbrock")
-        theme = get_active_theme()
 
         title = Title(
             r"Momentum gradient descent on the Rosenbrock function",
@@ -85,19 +89,26 @@ class MomentumRosenbrock(Slide):
         alpha = VT(0.0016)
         beta = VT(0.74)
         axes = self._make_axes()
-        heatmap = self._make_heatmap(axes)
-        contours = self._make_contours(axes)
-        trajectory = self._make_trajectory(axes, alpha, beta)
-        markers = self._make_static_markers(axes)
-        frame = self._plot_frame(axes)
-        plot = Group(axes, heatmap, contours, trajectory, markers, frame)
+        heatmap = self._make_heatmap(axes).set_z_index(LAYER_HEATMAP)
+        contours = self._make_contours(axes).set_z_index(LAYER_CONTOUR)
+        trajectory = self._make_trajectory(axes, alpha, beta).set_z_index(LAYER_TRAJECTORY)
+        markers = self._make_static_markers(axes).set_z_index(LAYER_MARKERS)
+        frame = self._plot_frame(axes).set_z_index(LAYER_FRAME)
+        plot = Group(axes, heatmap, contours, trajectory, frame, markers)
 
         controls = self._make_controls(alpha, beta)
         plot_region, control_region = self.region.split_regions(DOWN, 2)
         plot_region.scale_and_place(plot, buff=0.08)
         control_region.scale_and_place(controls, buff=0.16)
 
-        self.play(Write(title), FadeIn(heatmap), Write(contours), Write(markers), Write(frame), Write(trajectory))
+        self.play(
+            Write(title),
+            FadeIn(heatmap),
+            Write(contours),
+            Write(trajectory),
+            Write(frame),
+            Write(markers),
+        )
         self.play(FadeIn(controls))
 
         self.next_slide()
