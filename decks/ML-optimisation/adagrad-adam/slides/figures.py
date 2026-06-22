@@ -31,6 +31,7 @@ from manim import (
     Line,
     MathTex,
     Mobject,
+    PI,
     Rectangle,
     SurroundingRectangle,
     Title,
@@ -207,7 +208,14 @@ def _make_axes(
     *,
     x_length: float,
     y_length: float,
+    preserve_unit_aspect: bool = False,
 ) -> Axes:
+    if preserve_unit_aspect:
+        x_span = x_range[1] - x_range[0]
+        y_span = y_range[1] - y_range[0]
+        unit = min(x_length / x_span, y_length / y_span)
+        x_length = unit * x_span
+        y_length = unit * y_span
     return Axes(
         x_range=[*x_range],
         y_range=[*y_range],
@@ -285,8 +293,7 @@ def _quadratic_heatmap(axes: Axes, matrix: FloatArray, *, width: int = 640) -> I
     x_grid, y_grid = np.meshgrid(x_values, y_values)
     values = np.log10(_quadratic_values(matrix, x_grid, y_grid) + 1.0)
     image = ImageMobject(_blue_alpha_heatmap(_normalize_heat(values)))
-    image.stretch_to_fit_width(frame.width)
-    image.stretch_to_fit_height(frame.height)
+    image.set_width(frame.width)
     image.move_to(frame)
     return image
 
@@ -387,7 +394,13 @@ def _quadratic_panel(
     x_length: float = 4.2,
     y_length: float = 3.5,
 ) -> Group:
-    axes = _make_axes(x_range, y_range, x_length=x_length, y_length=y_length)
+    axes = _make_axes(
+        x_range,
+        y_range,
+        x_length=x_length,
+        y_length=y_length,
+        preserve_unit_aspect=True,
+    )
     heatmap = _quadratic_heatmap(axes, matrix, width=520).set_z_index(LAYER_HEATMAP)
     levels = _quadratic_level_sets(axes, matrix)
     levels.set_z_index(LAYER_CONTOUR)
@@ -487,11 +500,11 @@ def _mode_path(axes: Axes, eta: float, steps: int = 50) -> VGroup:
         screen_point = _axes_point(axes, point)
         if previous_screen is not None:
             connector = Line(previous_screen, screen_point)
-            connector.set_stroke(C_ORANGE, width=2.0, opacity=0.88)
+            connector.set_stroke(C_GREEN, width=2.0, opacity=0.88)
             connectors.add(connector)
-        dot = Dot(screen_point, color=C_ORANGE, radius=0.027)
+        dot = Dot(screen_point, color=C_GREEN, radius=0.027)
         if index == 0:
-            dot.set_color(C_YELLOW).scale(1.55)
+            dot.scale(1.55)
         dots.add(dot)
         previous_screen = screen_point
 
@@ -504,11 +517,9 @@ def _mode_path(axes: Axes, eta: float, steps: int = 50) -> VGroup:
             coefficients[0] * factors[0] ** step * eigvecs[:, 0],
             coefficients[1] * factors[1] ** step * eigvecs[:, 1],
         ]
-        resultant = components[0] + components[1]
         for vector, color, width in (
             (components[0], C_BLUE, 1.4),
             (components[1], C_ORANGE, 1.4),
-            (resultant, C_TEXT, 1.15),
         ):
             if _inside_axes(axes, vector):
                 arrow = _axis_arrow(axes, np.zeros(2), vector, color=color, width=width)
@@ -606,71 +617,95 @@ def _eta_slider(tracker: VT, spec: SliderSpec) -> VGroup:
     return VGroup(label, track, ticks, fill, knob, value)
 
 
-def _signed_response_chart(
+def _mode_magnitude_chart(
     eta: VT,
     lambda_i: float,
     *,
+    coefficient: float,
     color: str,
-    row_label: str,
+    mode_index: int,
+    mode_tag: str,
     width: float,
     height: float,
     show_x_label: bool,
 ) -> VGroup:
+    y_max = 10.0 * np.ceil(max(15.0, coefficient**2 * 1.05) / 10.0)
     frame = Rectangle(width=width, height=height)
     frame.set_stroke(C_FRAME, width=0.9, opacity=0.75)
     baseline = Line(LEFT * width / 2, RIGHT * width / 2)
     baseline.set_stroke(C_MUTED, width=0.8, opacity=0.76)
-    baseline.move_to(frame)
+    baseline.move_to(frame.get_bottom())
 
-    steps = np.arange(0, 151, 3)
+    epsilon_y = frame.get_bottom()[1] + frame.height * 0.1 / y_max
+    epsilon_line = Line(frame.get_left(), frame.get_right())
+    epsilon_line.set_stroke(C_MUTED, width=0.65, opacity=0.52)
+    epsilon_line.move_to([frame.get_center()[0], epsilon_y, frame.get_center()[2]])
+    epsilon_label = MathTex(r"\epsilon", color=C_MUTED, font_size=14)
+    epsilon_label.next_to(epsilon_line, RIGHT, buff=0.04)
+
+    steps = np.arange(0, 151, 2)
     bars = VGroup()
     for index, step in enumerate(steps):
         bar = Rectangle(width=0.01, height=0.01)
 
         def update_bar(mob: Rectangle, *, step: int = int(step), index: int = index) -> None:
-            response = float((1.0 - ~eta * lambda_i) ** step)
+            response = abs(1.0 - ~eta * lambda_i) ** (2 * (step + 1))
+            value = float(coefficient**2 * response)
             bar_width = frame.width / len(steps) * 0.62
-            bar_height = max(frame.height * 0.46 * abs(response), 0.004)
+            bar_height = max(frame.height * min(value / y_max, 1.0), 0.004)
             x = frame.get_left()[0] + frame.width * (index + 0.5) / len(steps)
-            y = frame.get_center()[1] + np.sign(response) * bar_height / 2
+            y = frame.get_bottom()[1] + bar_height / 2
             replacement = Rectangle(width=bar_width, height=bar_height)
-            replacement.set_fill(color if response >= 0 else C_RED, opacity=0.88)
-            replacement.set_stroke(color if response >= 0 else C_RED, opacity=0)
+            replacement.set_fill(color, opacity=0.88)
+            replacement.set_stroke(color, opacity=0)
             replacement.move_to([x, y, frame.get_center()[2]])
             mob.become(replacement)
 
         bar.add_updater(update_bar)
         bars.add(bar)
 
-    row = MathTex(row_label, color=color, font_size=20)
-    row.next_to(frame, LEFT, buff=0.12)
+    y_label = MathTex(
+        rf"\|(1-\eta\lambda_{mode_index})^{{t+1}}\alpha_{mode_index}v_{mode_index}\|_2^2",
+        color=color,
+        font_size=15,
+    )
+    y_label.rotate(PI / 2)
+    y_label.next_to(frame, LEFT, buff=0.10)
+    tag = MathTex(mode_tag, color=color, font_size=17)
+    tag.move_to(frame.get_corner(UL) + RIGHT * 0.60 + DOWN * 0.15)
     r_readout = VGroup(
         MathTex(r"r_i=", color=C_MUTED, font_size=18),
         DN(lambda: 1.0 - ~eta * lambda_i, num_decimal_places=3, font_size=17),
     ).arrange(RIGHT, buff=0.06)
     r_readout.move_to(frame.get_corner(UR) + LEFT * 0.55 + DOWN * 0.18)
-    x_label = Caption(r"iteration $t$") if show_x_label else VGroup()
+    x_label = Caption(r"even iteration $t$") if show_x_label else VGroup()
     if show_x_label:
         x_label.next_to(frame, DOWN, buff=0.08)
-    return VGroup(frame, baseline, bars, row, r_readout, x_label)
+    return VGroup(frame, baseline, epsilon_line, epsilon_label, bars, y_label, tag, r_readout, x_label)
 
 
 def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -> VGroup:
-    title = Caption("eigenvalue coefficient decrease")
-    flat = _signed_response_chart(
+    title = Caption("squared mode magnitudes")
+    _, eigvecs = _rotated_quadratic_matrix()
+    coefficients = eigvecs.T @ np.array([6.0, 8.0], dtype=np.float64)
+    flat = _mode_magnitude_chart(
         eta,
         MU,
+        coefficient=float(coefficients[0]),
         color=C_BLUE,
-        row_label=r"\lambda_i=\mu\text{ on }q_{\min}",
+        mode_index=1,
+        mode_tag=r"\lambda_1=\alpha",
         width=width,
         height=height,
         show_x_label=False,
     )
-    steep = _signed_response_chart(
+    steep = _mode_magnitude_chart(
         eta,
         LAMBDA_MAX,
+        coefficient=float(coefficients[1]),
         color=C_ORANGE,
-        row_label=r"\lambda_i=L\text{ on }q_{\max}",
+        mode_index=2,
+        mode_tag=r"\lambda_2=\beta",
         width=width,
         height=height,
         show_x_label=True,
@@ -685,17 +720,27 @@ def _bar_chart_for_response(
     top_values: FloatArray,
     bottom_values: FloatArray,
 ) -> VGroup:
-    top = _response_bars(values=top_values[::4], color=C_BLUE, width=2.25, height=0.82, title=title)
+    title_parts = [Caption(part) for part in title.splitlines()]
+    column_title = VGroup(*title_parts).arrange(DOWN, buff=0.02) if len(title_parts) > 1 else title_parts[0]
+    top = _response_bars(
+        values=top_values[::4],
+        color=C_BLUE,
+        width=2.25,
+        height=0.78,
+        title=r"$\alpha$ coordinate",
+    )
     bottom = _response_bars(
         values=bottom_values[::4],
         color=C_ORANGE,
         width=2.25,
-        height=0.82,
-        title=r"$L$ coordinate",
+        height=0.78,
+        title=r"$\beta$ coordinate",
     )
-    bottom.next_to(top, DOWN, buff=0.34)
+    bottom.next_to(top, DOWN, buff=0.30)
     top[3].align_to(top[0], LEFT)
-    chart = VGroup(top, bottom)
+    bottom[3].align_to(bottom[0], LEFT)
+    rows = VGroup(top, bottom)
+    chart = VGroup(column_title, rows).arrange(DOWN, buff=0.16)
     return _panel_shell(chart, buff=0.1)
 
 
@@ -868,34 +913,57 @@ class QuadraticRotation(Slide):
         matrix, eigvecs = _rotated_quadratic_matrix()
         diagonal = np.diag([MU, LAMBDA_MAX])
         body, strip = _split_rows(self.region, [4.3, 1.0])
-        left, mid, right = _split_weighted(body, [1.0, 0.34, 1.0])
+        left, mid, right = _split_weighted(body, [1.0, 0.42, 1.0])
 
-        original = _quadratic_panel(matrix, "original coordinates", x_length=4.7, y_length=3.7)
+        original = _quadratic_panel(matrix, "original coordinates", x_length=4.4, y_length=4.4)
         flat_vec = eigvecs[:, 0]
         steep_vec = eigvecs[:, 1]
+        original_axes = original[1]
         original.add(
-            _axis_arrow(original[1], np.zeros(2), 3.2 * flat_vec, color=C_BLUE),
-            _axis_arrow(original[1], np.zeros(2), 1.7 * steep_vec, color=C_ORANGE),
+            _axis_arrow(original_axes, np.zeros(2), 3.25 * flat_vec, color=C_BLUE),
+            _axis_arrow(original_axes, np.zeros(2), 1.75 * steep_vec, color=C_ORANGE),
+            MathTex(r"v_{\min}", color=C_BLUE, font_size=23).move_to(
+                original_axes.c2p(*(3.55 * flat_vec))
+            ),
+            MathTex(r"v_{\max}", color=C_ORANGE, font_size=23).move_to(
+                original_axes.c2p(*(2.05 * steep_vec))
+            ),
         )
-        eigenbasis = _quadratic_panel(diagonal, "eigenbasis coordinates", x_length=4.7, y_length=3.7)
+        eigenbasis = _quadratic_panel(diagonal, "eigenbasis coordinates", x_length=4.4, y_length=4.4)
+        eigen_axes = eigenbasis[1]
         eigenbasis.add(
-            _axis_arrow(eigenbasis[1], np.zeros(2), np.array([3.2, 0.0]), color=C_BLUE),
-            _axis_arrow(eigenbasis[1], np.zeros(2), np.array([0.0, 1.7]), color=C_ORANGE),
+            _axis_arrow(eigen_axes, np.zeros(2), np.array([3.25, 0.0]), color=C_BLUE),
+            _axis_arrow(eigen_axes, np.zeros(2), np.array([0.0, 1.75]), color=C_ORANGE),
+            MathTex(r"v_{\min}", color=C_BLUE, font_size=23).move_to(eigen_axes.c2p(3.55, 0.22)),
+            MathTex(r"v_{\max}", color=C_ORANGE, font_size=23).move_to(eigen_axes.c2p(0.34, 2.05)),
         )
         left.scale_and_place(original)
         right.scale_and_place(eigenbasis)
 
-        map_label = MathTex(r"V^\top(x-x^\star)", color=C_PURPLE, font_size=29)
+        map_label = VGroup(
+            MathTex(r"x\mapsto", color=C_PURPLE, font_size=25),
+            MathTex(r"V^\top(x-x^\star)", color=C_PURPLE, font_size=25),
+        ).arrange(DOWN, buff=0.04)
         map_arrow = Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0)
         map_group = VGroup(map_label, map_arrow).arrange(DOWN, buff=0.18)
         mid.scale_and_place(map_group, buff=0.08)
 
         equations = VGroup(
             MathTex(r"f(x)=\frac12(x-x^\star)^\top A(x-x^\star)", font_size=30),
-            MathTex(r"A=V\Lambda V^\top,\qquad A v_i=\lambda_i v_i", font_size=30),
+            MathTex(r"V^\top A V=\operatorname{diag}(\alpha,\beta)", font_size=30),
+            MathTex(r"A v_i=\lambda_i v_i", font_size=30),
             MathTex(r"x_0-x^\star=\sum_i \alpha_i v_i", font_size=30),
-        ).arrange(RIGHT, buff=0.5)
-        _color_text_parts(equations, {r"v_i": C_BLUE, r"\lambda_i": C_ORANGE, r"\alpha_i": C_GREEN})
+        ).arrange(RIGHT, buff=0.42)
+        _color_text_parts(
+            equations,
+            {
+                r"v_i": C_BLUE,
+                r"\lambda_i": C_ORANGE,
+                r"\alpha_i": C_GREEN,
+                r"\alpha": C_BLUE,
+                r"\beta": C_ORANGE,
+            },
+        )
         strip.scale_and_place(_themed_box(equations), buff=0.1)
 
         self.play(Write(title), FadeIn(original))
@@ -915,14 +983,20 @@ class GradientDescentModes(Slide):
         top, bottom = _split_rows(self.region, [2.0, 1.0])
         top_left, top_right = _split_weighted(top, [3.0, 2.0])
 
-        axes = _make_axes((-2.8, 10.8, 2), (-4.4, 9.4, 2), x_length=6.6, y_length=4.2)
+        axes = _make_axes(
+            (-2.75, 10.75, 2),
+            (-4.35, 9.35, 2),
+            x_length=6.6,
+            y_length=4.2,
+            preserve_unit_aspect=True,
+        )
         heatmap = _quadratic_heatmap(axes, matrix).set_z_index(LAYER_HEATMAP)
         contours = _quadratic_level_sets(axes, matrix, count=14).set_z_index(LAYER_CONTOUR)
         frame = _plot_frame(axes).set_z_index(LAYER_FRAME)
         origin = Dot(axes.c2p(0, 0), color=C_TEXT, radius=0.055).set_z_index(LAYER_MARKERS)
         origin_label = MathTex(r"x^\star", color=C_TEXT, font_size=24).next_to(origin, DOWN + RIGHT)
-        start = Dot(axes.c2p(6, 8), color=C_YELLOW, radius=0.065).set_z_index(LAYER_MARKERS)
-        start_label = MathTex(r"x_0", color=C_YELLOW, font_size=24).next_to(start, UP + RIGHT)
+        start = Dot(axes.c2p(6, 8), color=C_GREEN, radius=0.065).set_z_index(LAYER_MARKERS)
+        start_label = MathTex(r"x_0", color=C_GREEN, font_size=24).next_to(start, UP + RIGHT)
         markers = VGroup(origin, origin_label, start, start_label)
         plot_shell = Group(heatmap, contours, axes, frame, markers)
         top_left.scale_and_place(plot_shell, buff=0.08)
@@ -940,19 +1014,16 @@ class GradientDescentModes(Slide):
         responses.update()
 
         rule = MathTex(
-            r"y_{t+1,i}=(1-\eta\lambda_i)y_{t,i}",
-            font_size=31,
+            r"x_{t+1}-x^\star=\sum_i(1-\eta\lambda_i)^{t+1}\alpha_i v_i",
+            font_size=30,
         )
-        modes = MathTex(
-            r"p_t(\lambda_i)=(1-\eta\lambda_i)^t",
-            font_size=31,
-        )
+        modes = MathTex(r"r_i=1-\eta\lambda_i", font_size=30)
         energy = MathTex(
-            r"f(x_t)-f_\star=\frac12\sum_i\lambda_i y_{0,i}^2(1-\eta\lambda_i)^{2t}",
+            r"f(x_t)-f_\star=\frac12\sum_i\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}",
             font_size=30,
         )
         rho = VGroup(
-            MathTex(r"\rho(\eta)=\max\{|1-\eta\mu|,\ |1-\eta L|\}=", font_size=28),
+            MathTex(r"\rho_{\mathrm{GD}}(\eta)=\max\{|1-\eta\alpha|,\ |1-\eta\beta|\}=", font_size=28),
             DN(
                 lambda: max(abs(1.0 - ~eta * MU), abs(1.0 - ~eta * LAMBDA_MAX)),
                 num_decimal_places=3,
@@ -961,11 +1032,11 @@ class GradientDescentModes(Slide):
         ).arrange(RIGHT, buff=0.08)
         factors = VGroup(
             VGroup(
-                MathTex(r"1-\eta\mu=", color=C_BLUE, font_size=25),
+                MathTex(r"1-\eta\alpha=", color=C_BLUE, font_size=25),
                 DN(lambda: 1.0 - ~eta * MU, num_decimal_places=3, font_size=23),
             ).arrange(RIGHT, buff=0.06),
             VGroup(
-                MathTex(r"1-\eta L=", color=C_ORANGE, font_size=25),
+                MathTex(r"1-\eta\beta=", color=C_ORANGE, font_size=25),
                 DN(lambda: 1.0 - ~eta * LAMBDA_MAX, num_decimal_places=3, font_size=23),
             ).arrange(RIGHT, buff=0.06),
         ).arrange(RIGHT, buff=0.36)
@@ -979,9 +1050,10 @@ class GradientDescentModes(Slide):
             {
                 r"\eta": C_ORANGE,
                 r"\lambda_i": C_ORANGE,
-                r"\mu": C_BLUE,
-                r"L": C_ORANGE,
-                r"p_t": C_GREEN,
+                r"\alpha_i": C_GREEN,
+                r"\alpha": C_BLUE,
+                r"\beta": C_ORANGE,
+                r"r_i": C_GREEN,
             },
         )
         bottom.scale_and_place(_themed_box(equations), buff=0.12)
@@ -1029,10 +1101,10 @@ class AdaGradKnownRuler(Slide):
                 y_length=3.85,
             )
             axes = panel[1]
-            gd = _linear_preconditioner_path(matrix, x0, np.eye(2), 70, eta_gd)
+            gd = _linear_preconditioner_path(matrix, x0, np.eye(2), 102, eta_gd)
             diagonal = np.diag(np.diag(matrix))
-            known = _linear_preconditioner_path(matrix, x0, np.linalg.inv(diagonal), 45)
-            adagrad = _radial_adagrad_path(x0, 48) if radial else _coordinate_adagrad_path(matrix, x0, 48)
+            known = _linear_preconditioner_path(matrix, x0, np.linalg.inv(diagonal), 65)
+            adagrad = _radial_adagrad_path(x0, 71) if radial else _coordinate_adagrad_path(matrix, x0, 71)
             paths = VGroup(
                 _path_with_dots(axes, gd, color=C_GREEN, step=4),
                 _path_with_dots(axes, known, color=C_PURPLE, step=3),
@@ -1075,14 +1147,18 @@ class AdaGradDiagonalScaling(Slide):
             (rows[0], axis_matrix, "axis-aligned"),
             (rows[1], rotated_matrix, "rotated"),
         ):
-            before_region, arrow_region, after_region = _split_weighted(row_region, [1.0, 0.18, 1.0])
+            before_region, arrow_region, after_region = _split_weighted(row_region, [1.0, 0.30, 1.0])
             diagonal = np.diag(np.diag(matrix))
             scaled = np.linalg.inv(np.sqrt(diagonal)) @ matrix @ np.linalg.inv(np.sqrt(diagonal))
             before = _quadratic_panel(matrix, f"{label} quadratic", x_length=4.0, y_length=2.65)
             after = _quadratic_panel(scaled, "after diagonal scaling", x_length=4.0, y_length=2.65)
             before_region.scale_and_place(before, buff=0.08)
             after_region.scale_and_place(after, buff=0.08)
-            arrow = Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0)
+            arrow = VGroup(
+                MathTex(r"x\mapsto", color=C_PURPLE, font_size=22),
+                MathTex(r"D_A^{-1/2}x", color=C_PURPLE, font_size=22),
+                Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0),
+            ).arrange(DOWN, buff=0.06)
             arrow_region.scale_and_place(arrow, buff=0.06)
             row_groups.append((before, arrow, after))
 
@@ -1110,7 +1186,7 @@ class AdaGradCoordinateResponse(Slide):
         columns = _split_weighted(chart_region, [1.0, 1.0, 1.0])
         specs = [
             ResponseSpec("GD: safe global step", "GD", 1.0 / LAMBDA_MAX),
-            ResponseSpec("GD: balanced scalar step", "GD", 2.0 / (MU + LAMBDA_MAX)),
+            ResponseSpec("GD: balanced\ninverse-curvature step", "GD", 2.0 / (MU + LAMBDA_MAX)),
             ResponseSpec("AdaGrad: activity counter", "AdaGrad", 0.15),
         ]
 
@@ -1157,7 +1233,7 @@ class AdaGradWeightedLedger(Slide):
     def construct(self) -> None:
         title = _start_slide(self, "The weighted ledger identity")
         visual_region, proof_region = _split_rows(self.region, [2.0, 1.0])
-        left, arrow_region, right = _split_weighted(visual_region, [1.0, 0.18, 1.0])
+        left, arrow_region, right = _split_weighted(visual_region, [1.0, 0.30, 1.0])
 
         d_sqrt = np.diag([2.0, 1.0])
         d_inv_sqrt = np.linalg.inv(d_sqrt)
@@ -1173,7 +1249,11 @@ class AdaGradWeightedLedger(Slide):
         left.scale_and_place(weighted, buff=0.08)
         right.scale_and_place(euclidean, buff=0.08)
 
-        map_arrow = Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0)
+        map_arrow = VGroup(
+            MathTex(r"x\mapsto", color=C_PURPLE, font_size=22),
+            MathTex(r"D_t^{-1/2}x", color=C_PURPLE, font_size=22),
+            Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0),
+        ).arrange(DOWN, buff=0.06)
         arrow_region.scale_and_place(map_arrow, buff=0.06)
 
         ledger_lines = VGroup(
@@ -1210,16 +1290,29 @@ class AdaGradWeightedLedger(Slide):
         title: str,
         norm_suffix: str,
     ) -> Group:
-        axes = _make_axes((-2.8, 3.4, 1), (-1.0, 3.9, 1), x_length=4.65, y_length=3.35)
+        axes = _make_axes(
+            (-2.8, 3.4, 1),
+            (-1.0, 3.9, 1),
+            x_length=4.65,
+            y_length=3.35,
+            preserve_unit_aspect=True,
+        )
         matrix = np.diag([0.55, 1.55]) if norm_suffix == "D_t" else np.eye(2)
         heatmap = _quadratic_heatmap(axes, matrix, width=430).set_z_index(LAYER_HEATMAP)
         levels = _quadratic_level_sets(axes, matrix, count=7)
         levels.set_z_index(LAYER_CONTOUR)
-        labels = {
-            "star": r"x^\star",
-            "xt": r"x_t",
-            "xt1": r"x_{t+1}",
-        }
+        if norm_suffix == "D_t":
+            labels = {
+                "star": r"D_t^{1/2}x^\star",
+                "xt": r"D_t^{1/2}x_t",
+                "xt1": r"D_t^{1/2}x_{t+1}",
+            }
+        else:
+            labels = {
+                "star": r"x^\star",
+                "xt": r"x_t",
+                "xt1": r"x_{t+1}",
+            }
         p_star = points["star"]
         p_xt = points["xt"]
         p_xt1 = points["xt1"]
@@ -1242,7 +1335,7 @@ class AdaGradWeightedLedger(Slide):
         )
         point_labels = VGroup(
             *(
-                MathTex(label, font_size=22, color=C_TEXT).next_to(
+                MathTex(label, font_size=18 if norm_suffix == "D_t" else 22, color=C_TEXT).next_to(
                     Dot(axes.c2p(float(points[key][0]), float(points[key][1])), radius=0),
                     direction,
                     buff=0.08,
