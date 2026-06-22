@@ -138,7 +138,7 @@ class MomentumRosenbrock(Slide):
 
         controls = self._make_controls(alpha, beta)
         plot_region, control_region = self.region.split_regions(DOWN, 2)
-        plot_region.scale_and_place(plot)
+        plot_region.scale_and_place(plot, buff=SMALL_BUFF)
         control_region.scale_and_place(controls)
 
         self.play(
