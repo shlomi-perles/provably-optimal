@@ -45,7 +45,6 @@ from manim import (
     VGroup,
     VMobject,
     Write,
-    always_redraw,
 )
 from simplex import Caption, DN, Slide, TexPage, VT, color_substrings, get_active_theme
 
@@ -150,9 +149,7 @@ RESPONSE_CHART_HEIGHT = 0.78
 RESPONSE_SAMPLE_STRIDE = 4
 ETA_SLIDER_HALF_LENGTH = 1.28
 MODE_CHART_STEP_STRIDE = 2
-MODE_CHART_MIN_Y_MAX = 15.0
-MODE_CHART_Y_STEP = 10.0
-MODE_CHART_HEADROOM = 1.05
+MODE_CHART_RESPONSE_Y_MAX = 1.0
 MODE_CHART_FRAME_STROKE_WIDTH = 0.9
 MODE_CHART_FRAME_OPACITY = 0.75
 MODE_CHART_BASELINE_STROKE_WIDTH = 0.8
@@ -168,6 +165,7 @@ MODE_CHART_BAR_PLACEHOLDER_RATIO = 1 / 100
 MODE_CHART_BAR_OPACITY = 0.88
 MODE_CHART_TAG_OFFSET = RIGHT * 0.60 + DOWN * 0.15
 MODE_CHART_READOUT_OFFSET = LEFT * 0.55 + DOWN * 0.18
+MODE_OVERSHOOT_ETA_NUMERATOR = 2.01
 C_ETA = C_GREEN
 MODE_TRAJECTORY_STYLE = OptimizationPathStyle(color=C_ETA)
 MULTILINE_TITLE_BUFF = SMALL_BUFF / 5
@@ -619,10 +617,40 @@ def _path_with_dots(
     return VGroup(line, dots)
 
 
-def _mode_path(axes: Axes, eta: float, steps: int = MODE_TRAJECTORY_STEPS) -> VGroup:
+def _mode_system() -> tuple[FloatArray, FloatArray, FloatArray]:
     matrix, _ = _rotated_quadratic_matrix()
     eigenvalues, eigvecs = _quadratic_eigendecomposition(matrix)
     coefficients = eigvecs.T @ MODE_INITIAL_POINT
+    return eigenvalues, eigvecs, coefficients
+
+
+def _mode_point(
+    *,
+    eigenvalues: FloatArray,
+    eigvecs: FloatArray,
+    coefficients: FloatArray,
+    eta: float,
+    step: int,
+) -> FloatArray:
+    factors = 1.0 - eta * eigenvalues
+    return eigvecs @ (coefficients * factors**step)
+
+
+def _mode_component(
+    *,
+    eigenvalues: FloatArray,
+    eigvecs: FloatArray,
+    coefficients: FloatArray,
+    eta: float,
+    step: int,
+    mode_index: int,
+) -> FloatArray:
+    factor = 1.0 - eta * eigenvalues[mode_index]
+    return coefficients[mode_index] * factor**step * eigvecs[:, mode_index]
+
+
+def _mode_path(axes: Axes, eta: float, steps: int = MODE_TRAJECTORY_STEPS) -> VGroup:
+    eigenvalues, eigvecs, coefficients = _mode_system()
     factors = 1.0 - eta * eigenvalues
     path = np.array([eigvecs @ (coefficients * factors**step) for step in range(steps + 1)])
     trajectory = OptimizationPath(axes, path, style=MODE_TRAJECTORY_STYLE)
@@ -646,6 +674,185 @@ def _mode_path(axes: Axes, eta: float, steps: int = MODE_TRAJECTORY_STEPS) -> VG
                 arrows.add(arrow)
 
     return VGroup(trajectory, arrows)
+
+
+class ModeTrajectory(VGroup):
+    """A GD eigenmode trajectory whose pieces update in place."""
+
+    def __init__(self, axes: Axes, eta: VT, steps: int = MODE_TRAJECTORY_STEPS) -> None:
+        super().__init__()
+        self.axes = axes
+        self.eta = eta
+        self.steps = steps
+        self.eigenvalues, self.eigvecs, self.coefficients = _mode_system()
+        self.origin = axes.c2p(0, 0)
+        self.frame = _plot_frame(axes)
+        self.style = MODE_TRAJECTORY_STYLE
+
+        dots = self._make_dots()
+        connectors = self._make_connectors(dots)
+        head_ring = self._make_head_ring(dots)
+        arrows = self._make_arrows()
+        self.add(dots, connectors, head_ring, arrows)
+
+    def _point(self, step: int) -> FloatArray:
+        return _mode_point(
+            eigenvalues=self.eigenvalues,
+            eigvecs=self.eigvecs,
+            coefficients=self.coefficients,
+            eta=~self.eta,
+            step=step,
+        )
+
+    def _component(self, step: int, mode_index: int) -> FloatArray:
+        return _mode_component(
+            eigenvalues=self.eigenvalues,
+            eigvecs=self.eigvecs,
+            coefficients=self.coefficients,
+            eta=~self.eta,
+            step=step,
+            mode_index=mode_index,
+        )
+
+    def _make_dots(self) -> VGroup:
+        dots = VGroup()
+        radius = self.frame.height * self.style.step_dot_frame_height_ratio
+        for step in range(self.steps + 1):
+            dot = Dot(radius=radius, color=self.style.color)
+            if step == 0:
+                dot.set_color(self.style.start_color)
+                dot.scale(self.style.start_dot_scale)
+            elif step == self.steps:
+                dot.scale(self.style.head_dot_scale)
+            dot.mode_visible = True
+            self._update_dot(dot, step)
+            dot.add_updater(lambda mob, step=step: self._update_dot(mob, step))
+            dots.add(dot)
+        return dots
+
+    def _update_dot(self, dot: Dot, step: int) -> None:
+        point = self._point(step)
+        visible = bool(np.all(np.isfinite(point)) and _inside_axes(self.axes, point))
+        if visible:
+            dot.move_to(_axes_point(self.axes, point))
+            if not dot.mode_visible:
+                dot.set_opacity(1)
+                dot.mode_visible = True
+            return
+
+        if dot.mode_visible:
+            dot.set_opacity(0)
+            dot.mode_visible = False
+
+    def _make_connectors(self, dots: VGroup) -> VGroup:
+        connectors = VGroup()
+        for start, end in pairwise(dots):
+            connector = Line(start.get_center(), end.get_center())
+            connector.set_stroke(
+                self.style.color,
+                width=self.style.stroke_width,
+                opacity=self.style.stroke_opacity,
+            )
+            connector.mode_visible = True
+            self._update_connector(connector, start, end)
+            connector.add_updater(
+                lambda mob, start=start, end=end: self._update_connector(mob, start, end)
+            )
+            connectors.add(connector)
+        return connectors
+
+    def _update_connector(self, connector: Line, start: Dot, end: Dot) -> None:
+        visible = start.mode_visible and end.mode_visible
+        if visible:
+            connector.put_start_and_end_on(start.get_center(), end.get_center())
+            if not connector.mode_visible:
+                connector.set_opacity(self.style.stroke_opacity)
+                connector.mode_visible = True
+            return
+
+        if connector.mode_visible:
+            connector.set_opacity(0)
+            connector.mode_visible = False
+
+    def _make_head_ring(self, dots: VGroup) -> Circle:
+        radius = self.frame.height * self.style.head_dot_frame_height_ratio
+        head_ring = Circle(radius=radius * self.style.head_ring_dot_scale, color=self.style.color)
+        head_ring.set_stroke(self.style.color, width=self.style.head_ring_stroke_width)
+        head_ring.mode_visible = True
+        self._update_head_ring(head_ring, dots[-1])
+        head_ring.add_updater(lambda mob: self._update_head_ring(mob, dots[-1]))
+        return head_ring
+
+    def _update_head_ring(self, ring: Circle, head: Dot) -> None:
+        if head.mode_visible:
+            ring.move_to(head)
+            if not ring.mode_visible:
+                ring.set_opacity(1)
+                ring.mode_visible = True
+            return
+
+        if ring.mode_visible:
+            ring.set_opacity(0)
+            ring.mode_visible = False
+
+    def _make_arrows(self) -> VGroup:
+        arrows = VGroup()
+        for step in range(0, self.steps + 1, MODE_ARROW_INTERVAL):
+            opacity = MODE_ARROW_OPACITY_RANGE[0] + (
+                MODE_ARROW_OPACITY_RANGE[1] - MODE_ARROW_OPACITY_RANGE[0]
+            ) * step / self.steps
+            for mode_index, color in ((0, C_BLUE), (1, C_ORANGE)):
+                arrow = _axis_arrow(
+                    self.axes,
+                    np.zeros(2),
+                    self._initial_arrow_vector(step, mode_index),
+                    color=color,
+                    width=MODE_VECTOR_ARROW_SCALE,
+                )
+                arrow.mode_visible = True
+                arrow.mode_opacity = opacity
+                arrow.set_opacity(opacity)
+                self._update_arrow(arrow, step, mode_index)
+                arrow.add_updater(
+                    lambda mob, step=step, mode_index=mode_index: self._update_arrow(
+                        mob,
+                        step,
+                        mode_index,
+                    )
+                )
+                arrows.add(arrow)
+        return arrows
+
+    def _initial_arrow_vector(self, step: int, mode_index: int) -> FloatArray:
+        vector = self._component(step, mode_index)
+        if self._arrow_visible(vector):
+            return vector
+        return np.array([POLYLINE_FALLBACK_STEP, 0.0], dtype=np.float64)
+
+    def _arrow_visible(self, vector: FloatArray) -> bool:
+        return bool(
+            np.all(np.isfinite(vector))
+            and np.linalg.norm(vector) > ZERO_AXIS_EPSILON
+            and _inside_axes(self.axes, vector)
+        )
+
+    def _update_arrow(self, arrow: Arrow, step: int, mode_index: int) -> None:
+        vector = self._component(step, mode_index)
+        visible = self._arrow_visible(vector)
+        if visible:
+            arrow.put_start_and_end_on(self.origin, _axes_point(self.axes, vector))
+            if not arrow.mode_visible:
+                arrow.set_opacity(arrow.mode_opacity)
+                arrow.mode_visible = True
+            return
+
+        if arrow.mode_visible:
+            arrow.set_opacity(0)
+            arrow.mode_visible = False
+
+
+def _mode_trajectory(axes: Axes, eta: VT, steps: int = MODE_TRAJECTORY_STEPS) -> ModeTrajectory:
+    return ModeTrajectory(axes, eta, steps)
 
 
 def _response_bars(
@@ -714,7 +921,12 @@ def _eta_slider(tracker: VT, spec: SliderSpec, eigenvalues: FloatArray) -> VGrou
         half_length=ETA_SLIDER_HALF_LENGTH,
         label_font_size=theme.typography.caption,
         value_font_size=theme.typography.caption,
-        tick_values=(1.0 / beta, 2.0 / (alpha + beta), 2.0 / beta),
+        tick_values=(
+            1.0 / beta,
+            2.0 / (alpha + beta),
+            2.0 / beta,
+            spec.maximum,
+        ),
         show_endpoint_labels=True,
     )
 
@@ -722,46 +934,80 @@ def _eta_slider(tracker: VT, spec: SliderSpec, eigenvalues: FloatArray) -> VGrou
 def _mode_response_values(
     *,
     lambda_i: float,
-    coefficient: float,
     eta: float,
     response_steps: FloatArray,
 ) -> FloatArray:
-    factor = abs(1.0 - eta * lambda_i)
-    return coefficient**2 * factor ** (2 * (response_steps + 1))
+    factor = 1.0 - eta * lambda_i
+    return factor**response_steps
 
 
 def _mode_response_value(
     *,
     lambda_i: float,
-    coefficient: float,
     eta: float,
     response_step: float,
 ) -> float:
-    factor = abs(1.0 - eta * lambda_i)
-    return float(coefficient**2 * factor ** (2 * (response_step + 1)))
+    factor = 1.0 - eta * lambda_i
+    return float(factor**response_step)
 
 
-def _mode_epsilon_crossing_index(
+def _mode_epsilon_crossing_step(
     *,
     lambda_i: float,
-    coefficient: float,
     eta: float,
-    response_steps: FloatArray,
-) -> int | None:
-    values = _mode_response_values(
-        lambda_i=lambda_i,
-        coefficient=coefficient,
-        eta=eta,
-        response_steps=response_steps,
-    )
-    crossings = np.flatnonzero(values < MODE_CHART_EPSILON)
-    if len(crossings) == 0:
+    max_step: float = RESPONSE_STEP_COUNT,
+) -> float | None:
+    factor = abs(1.0 - eta * lambda_i)
+    if factor >= 1.0:
         return None
-    return int(crossings[0])
+    if factor <= ZERO_AXIS_EPSILON:
+        return 0.0
+
+    step = np.log(MODE_CHART_EPSILON) / np.log(factor)
+    if not np.isfinite(step) or step > max_step:
+        return None
+    return max(float(step), 0.0)
+
+
+def _mode_epsilon_linear_rate_func(
+    *, lambda_i: float, eta_start: float, eta_end: float
+) -> Callable[[float], float]:
+    start_step = _mode_epsilon_crossing_step(lambda_i=lambda_i, eta=eta_start)
+    end_step = _mode_epsilon_crossing_step(lambda_i=lambda_i, eta=eta_end)
+    eta_delta = eta_end - eta_start
+    start_factor = 1.0 - eta_start * lambda_i
+    end_factor = 1.0 - eta_end * lambda_i
+
+    if (
+        start_step is None
+        or end_step is None
+        or abs(eta_delta) <= ZERO_AXIS_EPSILON
+        or start_factor * end_factor < 0
+    ):
+        return lambda alpha: float(alpha)
+
+    branch_factor = start_factor if abs(start_factor) > ZERO_AXIS_EPSILON else end_factor
+    branch_sign = 1.0 if branch_factor >= 0.0 else -1.0
+
+    def rate_func(alpha: float) -> float:
+        crossing_step = (1.0 - alpha) * start_step + alpha * end_step
+        if crossing_step <= ZERO_AXIS_EPSILON:
+            eta = 1.0 / lambda_i
+        else:
+            factor = MODE_CHART_EPSILON ** (1.0 / crossing_step)
+            eta = (1.0 - branch_sign * factor) / lambda_i
+        return float(np.clip((eta - eta_start) / eta_delta, 0.0, 1.0))
+
+    return rate_func
 
 
 def _mode_chart_sample_x(frame: Rectangle, sample_index: int, sample_count: int) -> float:
     return float(frame.get_left()[0] + frame.width * (sample_index + 0.5) / sample_count)
+
+
+def _mode_chart_step_x(frame: Rectangle, step: float, response_steps: FloatArray) -> float:
+    sample_index = step / MODE_CHART_STEP_STRIDE
+    return _mode_chart_sample_x(frame, sample_index, len(response_steps))
 
 
 def _mode_bar_height(frame: Rectangle, value: float, y_max: float) -> float:
@@ -771,11 +1017,10 @@ def _mode_bar_height(frame: Rectangle, value: float, y_max: float) -> float:
     )
 
 
-def _mode_magnitude_chart(
+def _mode_multiplier_chart(
     eta: VT,
     lambda_i: float,
     *,
-    coefficient: float,
     color: str,
     mode_index: int,
     mode_tag: str,
@@ -783,9 +1028,7 @@ def _mode_magnitude_chart(
     height: float,
     show_x_label: bool,
 ) -> VGroup:
-    y_max = MODE_CHART_Y_STEP * np.ceil(
-        max(MODE_CHART_MIN_Y_MAX, coefficient**2 * MODE_CHART_HEADROOM) / MODE_CHART_Y_STEP
-    )
+    y_max = MODE_CHART_RESPONSE_Y_MAX
     frame = Rectangle(width=width, height=height)
     frame.set_stroke(
         C_FRAME,
@@ -818,7 +1061,6 @@ def _mode_magnitude_chart(
         x = _mode_chart_sample_x(frame, index, len(response_steps))
         initial_value = _mode_response_value(
             lambda_i=lambda_i,
-            coefficient=coefficient,
             eta=~eta,
             response_step=float(response_step),
         )
@@ -835,17 +1077,15 @@ def _mode_magnitude_chart(
             mob: Rectangle,
             *,
             response_step: int = int(response_step),
-            x: float = x,
+            index: int = index,
         ) -> None:
             value = _mode_response_value(
                 lambda_i=lambda_i,
-                coefficient=coefficient,
                 eta=~eta,
                 response_step=response_step,
             )
             bar_height = _mode_bar_height(frame, value, y_max)
-            mob.stretch_to_fit_height(bar_height)
-            mob.move_to([x, frame.get_bottom()[1] + bar_height / 2, frame.get_center()[2]])
+            mob.stretch_to_fit_height(bar_height, about_edge=DOWN)
 
         bar.add_updater(update_bar)
         bars.add(bar)
@@ -859,34 +1099,38 @@ def _mode_magnitude_chart(
     epsilon_crossing.mode_crossing_visible = True
 
     def update_epsilon_crossing(mob: Line) -> None:
-        crossing_index = _mode_epsilon_crossing_index(
+        crossing_step = _mode_epsilon_crossing_step(
             lambda_i=lambda_i,
-            coefficient=coefficient,
             eta=~eta,
-            response_steps=response_steps,
+            max_step=float(response_steps[-1]),
         )
-        if crossing_index is None:
+        if crossing_step is None:
             if mob.mode_crossing_visible:
                 mob.set_opacity(0)
                 mob.mode_crossing_visible = False
             return
 
-        x = _mode_chart_sample_x(frame, crossing_index, len(response_steps))
+        x = _mode_chart_step_x(frame, crossing_step, response_steps)
         if not mob.mode_crossing_visible:
             mob.set_opacity(MODE_CHART_EPSILON_CROSSING_OPACITY)
             mob.mode_crossing_visible = True
-        mob.move_to([x, frame.get_center()[1], frame.get_center()[2]])
+        mob.set_x(x)
 
     update_epsilon_crossing(epsilon_crossing)
     epsilon_crossing.add_updater(update_epsilon_crossing)
 
     y_label = theme_math(
-        rf"\|(1-\eta\lambda_{mode_index})^{{t+1}}\alpha_{mode_index}v_{mode_index}\|_2^2",
+        r"(1-",
+        r"\eta",
+        rf"\lambda_{mode_index}",
+        r")^t",
         color=C_TEXT,
         typography="caption",
     )
+    y_label[1].set_color(C_ETA)
+    y_label[2].set_color(color)
     y_label.rotate(PI / 2)
-    y_label.scale_to_fit_height(frame.height)
+    y_label.scale_to_fit_height(frame.height - 2 * SMALL_BUFF)
     y_label.next_to(frame, LEFT, buff=SMALL_BUFF)
     tag = theme_math(mode_tag, color=color, typography="caption")
     tag.move_to(frame.get_corner(UL) + MODE_CHART_TAG_OFFSET)
@@ -895,9 +1139,9 @@ def _mode_magnitude_chart(
         DN(lambda: 1.0 - ~eta * lambda_i, num_decimal_places=3),
     ).arrange(RIGHT, buff=SMALL_BUFF)
     r_readout.move_to(frame.get_corner(UR) + MODE_CHART_READOUT_OFFSET)
-    x_label = Caption(r"even iteration $t$") if show_x_label else VGroup()
+    x_label = Caption(r"Iteration $t$") if show_x_label else VGroup()
     if show_x_label:
-        x_label.next_to(frame, DOWN)
+        x_label.next_to(frame, DOWN, buff=SMALL_BUFF)
     return VGroup(
         frame,
         baseline,
@@ -913,14 +1157,10 @@ def _mode_magnitude_chart(
 
 
 def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -> VGroup:
-    title = Caption("squared mode magnitudes")
-    matrix, _ = _rotated_quadratic_matrix()
-    eigenvalues, eigvecs = _quadratic_eigendecomposition(matrix)
-    coefficients = eigvecs.T @ MODE_INITIAL_POINT
-    flat = _mode_magnitude_chart(
+    eigenvalues, _, _ = _mode_system()
+    flat = _mode_multiplier_chart(
         eta,
         float(eigenvalues[0]),
-        coefficient=float(coefficients[0]),
         color=C_BLUE,
         mode_index=1,
         mode_tag=r"\lambda_1=\alpha",
@@ -928,10 +1168,9 @@ def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -
         height=height,
         show_x_label=False,
     )
-    steep = _mode_magnitude_chart(
+    steep = _mode_multiplier_chart(
         eta,
         float(eigenvalues[-1]),
-        coefficient=float(coefficients[1]),
         color=C_ORANGE,
         mode_index=2,
         mode_tag=r"\lambda_2=\beta",
@@ -939,9 +1178,7 @@ def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -
         height=height,
         show_x_label=True,
     )
-    charts = VGroup(flat, steep).arrange(DOWN, buff=MED_SMALL_BUFF, aligned_edge=RIGHT)
-    title.next_to(charts, UP)
-    return VGroup(title, charts)
+    return VGroup(flat, steep).arrange(DOWN, buff=SMALL_BUFF, aligned_edge=RIGHT)
 
 
 def _bar_chart_for_response(

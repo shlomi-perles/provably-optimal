@@ -13,7 +13,11 @@ class GradientDescentModes(Slide):
         matrix, _ = _rotated_quadratic_matrix()
         eigenvalues, _ = _quadratic_eigendecomposition(matrix)
         alpha, beta = float(eigenvalues[0]), float(eigenvalues[-1])
-        eta = VT(1.0 / beta)
+        eta_initial = 1.0 / (2.0 * beta)
+        eta_safe = 1.0 / beta
+        eta_balanced = 2.0 / (alpha + beta)
+        eta_overshoot = MODE_OVERSHOOT_ETA_NUMERATOR / (alpha + beta)
+        eta = VT(eta_initial)
         top, bottom = _split_rows(self.region, [2.0, 1.0])
         top_left, top_right = _split_weighted(top, [3.0, 2.0])
 
@@ -40,15 +44,18 @@ class GradientDescentModes(Slide):
 
         slider = _eta_slider(
             eta,
-            SliderSpec(r"\eta", 0.0, 2.0 / beta, 3, C_ETA),
+            SliderSpec(r"\eta", 0.0, max(2.0 / beta, eta_overshoot), 3, C_ETA),
             eigenvalues,
         )
         slider.scale(0.84)
         slider.move_to(frame.get_corner(DL), aligned_edge=DL)
         slider.shift(RIGHT * SMALL_BUFF + UP * SMALL_BUFF)
-        trajectory = always_redraw(lambda: _mode_path(axes, ~eta).set_z_index(LAYER_TRAJECTORY))
+        trajectory = _mode_trajectory(axes, eta).set_z_index(LAYER_TRAJECTORY)
 
-        responses = _mode_response_stack(eta)
+        responses = _mode_response_stack(
+            eta,
+            height=(top_right.height - SMALL_BUFF) / 2,
+        )
         top_right.scale_and_place(responses, buff=SMALL_BUFF)
         responses.update()
 
@@ -103,9 +110,33 @@ class GradientDescentModes(Slide):
         )
         self.play(Write(trajectory), FadeIn(slider), FadeIn(responses))
         self.play(Write(equations))
-        self.fragment(title="Balance the endpoints")
-        self.play(eta @ (2.0 / (alpha + beta)), run_time=3.0)
-        self.fragment(title="Let the steep mode oscillate")
-        self.play(eta @ (0.5 * (2.0 / (alpha + beta) + 2.0 / beta)), run_time=3.0)
-        self.fragment(title="Return to the safe step")
-        self.play(eta @ (1.0 / beta), run_time=2.4)
+        self.fragment(title="Move to the steep safe step")
+        self.play(
+            eta @ eta_safe,
+            run_time=3.0,
+            rate_func=_mode_epsilon_linear_rate_func(
+                lambda_i=beta,
+                eta_start=eta_initial,
+                eta_end=eta_safe,
+            ),
+        )
+        self.fragment(title="Overshoot, then balance endpoints")
+        self.play(
+            eta @ eta_overshoot,
+            run_time=3.0,
+            rate_func=_mode_epsilon_linear_rate_func(
+                lambda_i=alpha,
+                eta_start=eta_safe,
+                eta_end=eta_overshoot,
+            ),
+        )
+        self.play(
+            eta @ eta_balanced,
+            run_time=1.8,
+            rate_func=_mode_epsilon_linear_rate_func(
+                lambda_i=alpha,
+                eta_start=eta_overshoot,
+                eta_end=eta_balanced,
+            ),
+        )
+        self.wait(2)
