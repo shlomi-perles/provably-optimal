@@ -2,7 +2,15 @@
 
 from __future__ import annotations
 
+from manim import RoundedRectangle
+
 from slides.helpers.figure_helpers import *
+from slides.helpers.style import (
+    PANEL_CORNER_RADIUS,
+    PANEL_FILL_OPACITY,
+    PANEL_STROKE_OPACITY,
+    PANEL_STROKE_WIDTH,
+)
 
 
 class SecondOrderApproximation(Slide):
@@ -62,10 +70,45 @@ class SecondOrderApproximation(Slide):
         )
         f_star = float(f(np.array([x_star]))[0])
         x_min, x_max, x_step = LOCAL_X_RANGE
+        base_x_span = x_max - x_min
+        zoom_out_scale = 2.0
+        anchor_sweep_x = float(x_star + 2 * abs(x_star - x_t))
+        zoom_anchor_x = float(x_star)
+        zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
+        zoom_x_span = base_x_span * zoom_out_scale
+        zoom_x_min = zoom_anchor_x - zoom_anchor_x_ratio * zoom_x_span
+        zoom_x_max = zoom_x_min + zoom_x_span
+        beta_domain = np.linspace(
+            min(x_min, zoom_x_min, x_t, anchor_sweep_x),
+            max(x_max, zoom_x_max, x_t, anchor_sweep_x),
+            LOCAL_CURVE_SAMPLES,
+        )
+        beta_anchor_values = np.linspace(
+            min(x_t, anchor_sweep_x),
+            max(x_t, anchor_sweep_x),
+            max(2, LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT),
+        )
+
+        def beta_bound_for_anchor(anchor: float) -> float:
+            deltas = beta_domain - anchor
+            mask = np.abs(deltas) > ZERO_AXIS_EPSILON
+            required_curvatures = (
+                2
+                * (f(beta_domain[mask]) - f_scalar(anchor) - grad(anchor) * deltas[mask])
+                / deltas[mask] ** 2
+            )
+            return max(hess(anchor), float(np.max(required_curvatures)))
+
+        beta_target = float(
+            max(
+                LOCAL_BETA_INITIAL,
+                max(beta_bound_for_anchor(anchor) for anchor in beta_anchor_values),
+            )
+        )
         xs = np.linspace(x_min, x_max, LOCAL_CURVE_SAMPLES)
         dx = xs - x_t
         fixed_lower = f_t + g_t * dx + 0.5 * LOCAL_ALPHA_INITIAL * dx**2
-        fixed_upper = f_t + g_t * dx + 0.5 * LOCAL_BETA_INITIAL * dx**2
+        fixed_upper = f_t + g_t * dx + 0.5 * beta_target * dx**2
         fixed_local = f_t + g_t * dx + 0.5 * h_t * dx**2
         y_min = (
             min(float(np.min(fixed_lower)), float(np.min(fixed_local)), float(np.min(f(xs))))
@@ -97,11 +140,8 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOTTOM_AXIS_OPACITY,
         )
 
-        base_x_span = x_max - x_min
         base_y_span = y_max - y_min
-        zoom_anchor_x = float(x_star)
         zoom_anchor_y = f_star
-        zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
         zoom_anchor_y_ratio = (zoom_anchor_y - y_min) / base_y_span
 
         def view_scale_factor() -> float:
@@ -144,6 +184,8 @@ class SecondOrderApproximation(Slide):
                 points = [data_point(float(visible_xs[0]), clipped_y)]
                 points.append(points[0] + RIGHT * POLYLINE_FALLBACK_STEP)
             return points
+
+        model_dash_count = max(2, LOCAL_MODEL_DASH_COUNT // 4)
 
         def update_curve(
             mob: VMobject,
@@ -218,7 +260,7 @@ class SecondOrderApproximation(Slide):
             color: str,
             width: float,
         ) -> VGroup:
-            curve = VGroup(*(VMobject() for _ in range(LOCAL_MODEL_DASH_COUNT))).set_z_index(
+            curve = VGroup(*(VMobject() for _ in range(model_dash_count))).set_z_index(
                 LAYER_TRAJECTORY
             )
             update_dashed_curve(curve, fn, color=color, width=width)
@@ -299,31 +341,43 @@ class SecondOrderApproximation(Slide):
             dot = Dot(data_point(x_fn(), y_fn()), color=color, radius=radius).set_z_index(
                 LAYER_MARKERS
             )
-            dot.add_updater(lambda mob: mob.move_to(data_point(x_fn(), y_fn())))
             return dot
 
+        def track_dot(dot: Dot, x_fn: Callable[[], float], y_fn: Callable[[], float]) -> None:
+            dot.add_updater(lambda mob: mob.move_to(data_point(x_fn(), y_fn())))
+
+        def update_bottom_tick(
+            mob: VGroup,
+            x_fn: Callable[[], float],
+            *,
+            color: str,
+            tick_height: float,
+        ) -> None:
+            _, _, current_y_min, _ = view_limits()
+            mob[0].put_start_and_end_on(
+                data_point(x_fn(), current_y_min),
+                data_point(x_fn(), current_y_min + tick_height),
+            )
+            mob[0].set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
+            mob[1].scale_to_fit_height(TICK_LABEL_TEX_SCALE * mob[0].height)
+            mob[1].next_to(mob[0], DOWN, buff=SMALL_BUFF / view_scale_factor())
+
         def bottom_tick(x_fn: Callable[[], float], label: str, *, color: str) -> VGroup:
-            _, _, view_y_min, view_y_max = view_limits()
             tick_height = BOTTOM_TICK_HEIGHT_RATIO * base_y_span
-            tick = Line(data_point(x_fn(), view_y_min), data_point(x_fn(), view_y_min + tick_height))
-            tick.set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
-            tex = MathTex(label, color=color)
-            tex.scale_to_fit_height(TICK_LABEL_TEX_SCALE * tick.height)
-            tex.next_to(tick, DOWN, buff=SMALL_BUFF)
-            group = VGroup(tick, tex).set_z_index(LAYER_MARKERS)
-
-            def update_tick(mob: VGroup) -> None:
-                _, _, current_y_min, _ = view_limits()
-                mob[0].put_start_and_end_on(
-                    data_point(x_fn(), current_y_min),
-                    data_point(x_fn(), current_y_min + tick_height),
-                )
-                mob[0].set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
-                mob[1].scale_to_fit_height(TICK_LABEL_TEX_SCALE * mob[0].height)
-                mob[1].next_to(mob[0], DOWN, buff=SMALL_BUFF / view_scale_factor())
-
-            group.add_updater(update_tick)
+            group = VGroup(Line(), MathTex(label, color=color)).set_z_index(LAYER_MARKERS)
+            update_bottom_tick(group, x_fn, color=color, tick_height=tick_height)
             return group
+
+        def track_bottom_tick(mob: VGroup, x_fn: Callable[[], float], *, color: str) -> None:
+            tick_height = BOTTOM_TICK_HEIGHT_RATIO * base_y_span
+            mob.add_updater(
+                lambda tracked: update_bottom_tick(
+                    tracked,
+                    x_fn,
+                    color=color,
+                    tick_height=tick_height,
+                )
+            )
 
         def label_next_to_dot(
             label: str,
@@ -337,8 +391,10 @@ class SecondOrderApproximation(Slide):
             if colors is not None:
                 color_substrings(mob, colors)
             mob.next_to(dot, direction)
-            mob.add_updater(lambda label_mob: label_mob.next_to(dot, direction))
             return mob
+
+        def track_label_next_to_dot(mob: MathTex, dot: Dot, direction: FloatArray) -> None:
+            mob.add_updater(lambda label_mob: label_mob.next_to(dot, direction))
 
         def update_vertical_guide(
             mob: VGroup,
@@ -364,8 +420,7 @@ class SecondOrderApproximation(Slide):
             color: str,
             opacity: float,
         ) -> VGroup:
-            dash_count = max(2, LOCAL_MODEL_DASH_COUNT // 4)
-            guide = VGroup(*(Line() for _ in range(dash_count))).set_z_index(LAYER_TRAJECTORY)
+            guide = VGroup(*(Line() for _ in range(model_dash_count))).set_z_index(LAYER_TRAJECTORY)
             update_vertical_guide(guide, x_fn, color=color, opacity=opacity)
             return guide
 
@@ -446,8 +501,10 @@ class SecondOrderApproximation(Slide):
                 line.put_start_and_end_on(start, end)
             mob.set_stroke(WHITE, width=LOCAL_BRACKET_STROKE_WIDTH)
 
-        delta_bracket.add_updater(update_delta_bracket)
         update_delta_bracket(delta_bracket)
+
+        def track_delta_bracket(mob: VGroup) -> None:
+            mob.add_updater(update_delta_bracket)
         delta_label = theme_math(
             r"\delta=-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
             color=WHITE,
@@ -466,8 +523,10 @@ class SecondOrderApproximation(Slide):
                 )
             )
 
-        delta_label.add_updater(update_delta_label)
         update_delta_label(delta_label)
+
+        def track_delta_label(mob: MathTex) -> None:
+            mob.add_updater(update_delta_label)
 
         def alpha_minimum() -> tuple[float, float]:
             value = max(~alpha, 1e-3)
@@ -598,7 +657,9 @@ class SecondOrderApproximation(Slide):
             alpha_legend,
             beta_legend,
         ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
-        legend_available_width = frame.width - 2 * PANEL_BUFF
+        legend_box_buff = SMALL_BUFF
+        legend_frame_buff = SMALL_BUFF
+        legend_available_width = frame.width - 2 * (legend_box_buff + legend_frame_buff)
         legend_scale = min(
             legend_available_width / plot_legend.width,
             frame.height * LOCAL_LEGEND_FRAME_HEIGHT_RATIO / plot_legend.height,
@@ -607,27 +668,41 @@ class SecondOrderApproximation(Slide):
         plot_legend.scale(legend_scale)
         plot_legend.move_to(
             frame.get_corner(UR)
-            + LEFT * (plot_legend.width / 2 + PANEL_BUFF)
-            + DOWN * (plot_legend.height / 2 + PANEL_BUFF)
+            + LEFT * (plot_legend.width / 2 + legend_box_buff + legend_frame_buff)
+            + DOWN * (plot_legend.height / 2 + legend_box_buff + legend_frame_buff)
         )
 
-        def legend_background_for(entry_count: int) -> VMobject:
-            visible_entries = VGroup(*plot_legend.submobjects[:entry_count])
-            width_spacer = Line(ORIGIN, RIGHT * plot_legend.width).set_opacity(0)
-            width_spacer.move_to(visible_entries)
-            width_spacer.align_to(plot_legend, RIGHT)
-            background_target = VGroup(visible_entries, width_spacer)
-            return _themed_box(background_target, color=C_PANEL_DEEP)[0].set_z_index(
-                LAYER_MARKERS
-            )
+        def legend_background_height(entry_count: int) -> float:
+            visible_entries = plot_legend.submobjects[:entry_count]
+            top = max(entry.get_top()[1] for entry in visible_entries)
+            bottom = min(entry.get_bottom()[1] for entry in visible_entries)
+            return float(top - bottom + 2 * legend_box_buff)
 
-        legend_backgrounds = tuple(
-            legend_background_for(entry_count)
+        legend_background_heights = tuple(
+            legend_background_height(entry_count)
             for entry_count in range(1, len(plot_legend.submobjects) + 1)
         )
-        plot_legend_background = legend_backgrounds[0]
+        legend_background_top = plot_legend.get_top() + UP * legend_box_buff
+        plot_legend_background = RoundedRectangle(
+            corner_radius=PANEL_CORNER_RADIUS,
+            width=plot_legend.width + 2 * legend_box_buff,
+            height=legend_background_heights[0],
+        )
+        plot_legend_background.set_fill(C_PANEL_DEEP, opacity=PANEL_FILL_OPACITY)
+        plot_legend_background.set_stroke(
+            C_FRAME,
+            width=PANEL_STROKE_WIDTH,
+            opacity=PANEL_STROKE_OPACITY,
+        )
+        plot_legend_background.move_to(legend_background_top, aligned_edge=UP)
+        plot_legend_background.set_z_index(LAYER_MARKERS)
         plot_legend.set_z_index(LAYER_MARKERS + 1)
         plot.add(plot_legend_background, plot_legend)
+
+        def grow_legend_background(entry_count: int):
+            return plot_legend_background.animate.stretch_to_fit_height(
+                legend_background_heights[entry_count - 1]
+            ).move_to(legend_background_top, aligned_edge=UP)
 
         definition_template = TexTemplate()
         definition_template.add_to_preamble(r"\usepackage{amsthm}")
@@ -678,9 +753,6 @@ class SecondOrderApproximation(Slide):
         right.scale_and_place(right_panel, buff=SMALL_BUFF)
         sidebar_background = right_panel[0]
 
-        zoom_out_scale = 2.0
-        anchor_sweep_x = float(x_star + 2 * abs(x_star - x_t))
-
         self.play(
             Write(title),
             Write(frame),
@@ -693,7 +765,6 @@ class SecondOrderApproximation(Slide):
             Write(x_t_value),
             Write(f_legend),
         )
-        track_curve(true_curve, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
         self.next_slide()
 
         self.play(
@@ -706,16 +777,69 @@ class SecondOrderApproximation(Slide):
             Write(next_line),
             Write(delta_bracket),
             Write(delta_label),
-            FadeOut(legend_backgrounds[0]),
-            FadeIn(legend_backgrounds[1]),
+            grow_legend_background(2),
             Write(hessian_legend),
         )
+        self.next_slide()
+
+        self.play(
+            Write(lower_model),
+            Write(alpha_marker),
+            Write(alpha_definition),
+            grow_legend_background(3),
+            Write(alpha_legend),
+        )
+        self.next_slide()
+
+        self.play(Write(upper_model), Write(beta_marker))
+        self.next_slide()
+
+        track_curve(
+            upper_model,
+            upper_model_values,
+            color=C_ORANGE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
+        self.play(beta @ beta_target)
+        for mob in (upper_model, beta_marker):
+            mob.clear_updaters()
+        self.play(
+            Write(beta_definition),
+            grow_legend_background(4),
+            Write(beta_legend),
+        )
+        self.next_slide()
+
+        track_curve(true_curve, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
         track_dashed_curve(
             local_model,
             local_model_values,
             color=C_GREEN,
             width=LOCAL_MODEL_STROKE_WIDTH,
         )
+        track_curve(
+            lower_model,
+            lower_model_values,
+            color=C_BLUE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        track_curve(
+            upper_model,
+            upper_model_values,
+            color=C_ORANGE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        track_dot(x_t_dot, lambda: x_t, lambda: f_t)
+        track_dot(newton_dot, lambda: x_next, lambda: y_next)
+        track_dot(star_dot, lambda: float(x_star), lambda: f_star)
+        track_bottom_tick(x_t_tick, lambda: x_t, color=C_YELLOW)
+        track_bottom_tick(next_tick, lambda: x_next, color=C_GREEN)
+        track_label_next_to_dot(x_t_value, x_t_dot, UR)
+        track_label_next_to_dot(star_label, star_dot, DR)
         track_vertical_guide(
             x_line,
             lambda: x_t,
@@ -728,27 +852,33 @@ class SecondOrderApproximation(Slide):
             color=C_GREEN,
             opacity=LOCAL_NEXT_GUIDE_OPACITY,
         )
-        self.next_slide()
-
-        self.play(
-            Write(lower_model),
-            Write(alpha_marker),
-            Write(alpha_definition),
-            FadeOut(legend_backgrounds[1]),
-            FadeIn(legend_backgrounds[2]),
-            Write(alpha_legend),
-        )
-        track_curve(
-            lower_model,
-            lower_model_values,
-            color=C_BLUE,
-            width=LOCAL_BOUND_STROKE_WIDTH,
-            opacity=LOCAL_BOUND_OPACITY,
-        )
+        track_delta_bracket(delta_bracket)
+        track_delta_label(delta_label)
         track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
+        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
+        self.play(view_scale @ zoom_out_scale)
+        for mob in (
+            true_curve,
+            local_model,
+            lower_model,
+            upper_model,
+            x_t_dot,
+            newton_dot,
+            star_dot,
+            x_t_tick,
+            next_tick,
+            x_t_value,
+            star_label,
+            x_line,
+            next_line,
+            delta_bracket,
+            delta_label,
+            alpha_marker,
+            beta_marker,
+        ):
+            mob.clear_updaters()
         self.next_slide()
 
-        self.play(Write(upper_model), Write(beta_marker))
         track_curve(
             upper_model,
             upper_model_values,
@@ -757,28 +887,26 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOUND_OPACITY,
         )
         track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
-        self.next_slide()
-
-        self.play(beta @ LOCAL_BETA_INITIAL)
-        self.play(
-            Write(beta_definition),
-            FadeOut(legend_backgrounds[2]),
-            FadeIn(legend_backgrounds[3]),
-            Write(beta_legend),
-        )
-        self.next_slide()
-
-        self.play(view_scale @ zoom_out_scale)
-        self.next_slide()
-
         self.play(beta_anchor @ anchor_sweep_x)
         self.next_slide()
 
         self.play(beta_anchor @ x_t)
+        for mob in (upper_model, beta_marker):
+            mob.clear_updaters()
         self.next_slide()
 
+        track_curve(
+            lower_model,
+            lower_model_values,
+            color=C_BLUE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
         self.play(alpha_anchor @ anchor_sweep_x)
         self.next_slide()
 
         self.play(alpha_anchor @ x_t)
+        for mob in (lower_model, alpha_marker):
+            mob.clear_updaters()
         self.next_slide()
