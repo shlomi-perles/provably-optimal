@@ -11,6 +11,7 @@ from manim import (
     MED_SMALL_BUFF,
     RIGHT,
     SMALL_BUFF,
+    TAU,
     UP,
     Create,
     Dot3D,
@@ -67,8 +68,12 @@ AXES_Z_LENGTH = 1.8
 SURFACE_U_RANGE = (-1.20, 1.10)
 SURFACE_V_RANGE = (-0.95, 1.25)
 SURFACE_RESOLUTION = (46, 46)
-MODEL_PATCH_RANGE = (-0.72, 0.72)
-MODEL_PATCH_RESOLUTION = (32, 32)
+MODEL_PATCH_HALF_SIDE = 0.72
+MODEL_PATCH_RADIUS = MODEL_PATCH_HALF_SIDE * np.sqrt(2)
+MODEL_PATCH_RADIAL_RANGE = (0.0, MODEL_PATCH_RADIUS)
+MODEL_PATCH_ANGLE_RANGE = (0.0, TAU)
+MODEL_PATCH_BASE_RESOLUTION = 32
+MODEL_PATCH_RESOLUTION = (MODEL_PATCH_BASE_RESOLUTION, 2 * MODEL_PATCH_BASE_RESOLUTION)
 CURRENT_POINT = np.array([-0.35, 1.10], dtype=np.float64)
 CURRENT_DOT_RADIUS_TO_Z_AXIS = 1 / 32
 CURRENT_DOT_Z_OFFSET_RATIO = 0.03
@@ -157,15 +162,16 @@ class AdaGradLocalSqueeze(ThreeDSlide):
         model_minimum = f_t - 0.5 * gradient @ inverse_diagonal @ gradient
         inverse_sqrt = np.diag(np.sqrt(np.diag(inverse_diagonal)))
 
-        def patch_point(u: float, v: float) -> FloatArray:
-            xy = model_center + inverse_sqrt @ np.array([u, v], dtype=np.float64)
-            z = model_minimum + 0.5 * (u**2 + v**2)
+        def patch_point(radius: float, angle: float) -> FloatArray:
+            local = radius * np.array([np.cos(angle), np.sin(angle)], dtype=np.float64)
+            xy = model_center + inverse_sqrt @ local
+            z = model_minimum + 0.5 * radius**2
             return axes.c2p(float(xy[0]), float(xy[1]), float(z))
 
         patch = ScalarFieldSurface(
             patch_point,
-            u_range=[*MODEL_PATCH_RANGE],
-            v_range=[*MODEL_PATCH_RANGE],
+            u_range=[*MODEL_PATCH_RADIAL_RANGE],
+            v_range=[*MODEL_PATCH_ANGLE_RANGE],
             resolution=MODEL_PATCH_RESOLUTION,
             color_func="height",
             colormap=[C_ORANGE, C_YELLOW],
