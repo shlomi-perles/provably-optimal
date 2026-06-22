@@ -37,6 +37,7 @@ from manim import (
     FadeOut,
     Group,
     ImageMobject,
+    Integer,
     Line,
     MathTex,
     PI,
@@ -45,6 +46,7 @@ from manim import (
     VGroup,
     VMobject,
     Write,
+    rush_into,
 )
 from simplex import Caption, DN, Slide, TexPage, VT, color_substrings, get_active_theme
 
@@ -165,7 +167,17 @@ MODE_CHART_BAR_PLACEHOLDER_RATIO = 1 / 100
 MODE_CHART_BAR_OPACITY = 0.88
 MODE_CHART_TAG_OFFSET = RIGHT * 0.60 + DOWN * 0.15
 MODE_CHART_READOUT_OFFSET = LEFT * 0.55 + DOWN * 0.18
+MODE_INITIAL_ETA_SUM_FACTOR = 0.54
 MODE_OVERSHOOT_ETA_NUMERATOR = 2.01
+MODE_FACTOR_INTERIOR_DOT_COUNT = 3
+MODE_FACTOR_DOT_INITIAL_STEP = 1
+MODE_FACTOR_DOT_FINAL_STEP = 80
+MODE_FACTOR_DOT_STEP_STRIDE = 2
+MODE_FACTOR_DOT_RANDOM_SEED = 24
+MODE_FACTOR_AXIS_HEIGHT_RATIO = 1 / 5
+MODE_FACTOR_DOT_RADIUS_RATIO = 1 / 26
+MODE_FACTOR_ZERO_TICK_DOT_HEIGHT_RATIO = 1.5
+MODE_FACTOR_DOT_COLORS = (C_BLUE, C_GREEN, C_PURPLE, C_YELLOW, C_ORANGE)
 C_ETA = C_GREEN
 MODE_TRAJECTORY_STYLE = OptimizationPathStyle(color=C_ETA)
 MULTILINE_TITLE_BUFF = SMALL_BUFF / 5
@@ -1179,6 +1191,142 @@ def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -
         show_x_label=True,
     )
     return VGroup(flat, steep).arrange(DOWN, buff=SMALL_BUFF, aligned_edge=RIGHT)
+
+
+def _mode_factor_lambdas(lambda_min: float, lambda_max: float) -> FloatArray:
+    rng = np.random.default_rng(MODE_FACTOR_DOT_RANDOM_SEED)
+    interior = np.sort(
+        rng.uniform(lambda_min, lambda_max, MODE_FACTOR_INTERIOR_DOT_COUNT)
+    )
+    return np.concatenate(([lambda_min], interior, [lambda_max]))
+
+
+def _mode_factor_axis_bound(
+    *,
+    lambda_min: float,
+    lambda_max: float,
+    eta_values: Sequence[float],
+) -> float:
+    lambdas = np.array([lambda_min, lambda_max], dtype=np.float64)
+    factors = 1.0 - np.outer(np.asarray(eta_values, dtype=np.float64), lambdas)
+    powers = factors**MODE_FACTOR_DOT_INITIAL_STEP
+    return float(np.max(np.abs(powers)))
+
+
+def _mode_factor_value(*, lambda_i: float, eta: float, iteration: int) -> float:
+    return float((1.0 - eta * lambda_i) ** iteration)
+
+
+def _mode_factor_iteration(iteration: VT) -> int:
+    value = ~iteration
+    if value <= MODE_FACTOR_DOT_INITIAL_STEP:
+        return MODE_FACTOR_DOT_INITIAL_STEP
+    even_iteration = MODE_FACTOR_DOT_STEP_STRIDE * round(
+        value / MODE_FACTOR_DOT_STEP_STRIDE
+    )
+    return int(
+        np.clip(
+            even_iteration,
+            MODE_FACTOR_DOT_INITIAL_STEP,
+            MODE_FACTOR_DOT_FINAL_STEP,
+        )
+    )
+
+
+def _mode_factor_axis(
+    eta: VT,
+    iteration: VT,
+    *,
+    lambda_min: float,
+    lambda_max: float,
+    eta_values: Sequence[float],
+    width: float,
+    height: float,
+) -> VGroup:
+    x_bound = _mode_factor_axis_bound(
+        lambda_min=lambda_min,
+        lambda_max=lambda_max,
+        eta_values=eta_values,
+    )
+    axes = Axes(
+        x_range=[-x_bound, x_bound, x_bound],
+        y_range=[-1.0, 1.0, 1.0],
+        x_length=width - 2 * SMALL_BUFF,
+        y_length=height * MODE_FACTOR_AXIS_HEIGHT_RATIO,
+        tips=False,
+        axis_config={
+            "include_ticks": False,
+            "include_numbers": False,
+            "stroke_color": WHITE,
+            "stroke_width": MODE_CHART_BASELINE_STROKE_WIDTH,
+            "stroke_opacity": 1.0,
+        },
+    )
+    axes.y_axis.set_opacity(0)
+
+    dot_radius = height * MODE_FACTOR_DOT_RADIUS_RATIO
+    zero_tick_half_height = (
+        dot_radius * MODE_FACTOR_ZERO_TICK_DOT_HEIGHT_RATIO
+    )
+    zero_tick = Line(DOWN * zero_tick_half_height, UP * zero_tick_half_height)
+    zero_tick.set_stroke(WHITE, width=MODE_CHART_BASELINE_STROKE_WIDTH)
+    zero_tick.move_to(axes.c2p(0, 0))
+    zero_label = theme_math("0", color=C_TEXT, typography="caption")
+    zero_label.next_to(zero_tick, DOWN, buff=SMALL_BUFF)
+
+    title = theme_math(
+        r"(1-",
+        r"\eta",
+        r"\lambda_i",
+        r")^t",
+        color=C_TEXT,
+        typography="caption",
+    )
+    title[1].set_color(C_ETA)
+    title[2].set_color(C_ORANGE)
+
+    iteration_label = theme_math("t=", color=C_YELLOW, typography="caption")
+    iteration_value = Integer(
+        _mode_factor_iteration(iteration),
+        color=C_TEXT,
+        font_size=get_active_theme().typography.caption,
+    )
+
+    def update_iteration_value(mob: Integer) -> None:
+        mob.set_value(_mode_factor_iteration(iteration))
+
+    iteration_value.add_updater(update_iteration_value)
+    iteration_readout = VGroup(iteration_label, iteration_value).arrange(
+        RIGHT,
+        buff=0,
+    )
+
+    dots = VGroup()
+    for lambda_i, color in zip(
+        _mode_factor_lambdas(lambda_min, lambda_max),
+        MODE_FACTOR_DOT_COLORS,
+        strict=True,
+    ):
+        dot = Dot(radius=dot_radius, color=color)
+
+        def update_dot(mob: Dot, *, lambda_i: float = float(lambda_i)) -> None:
+            value = _mode_factor_value(
+                lambda_i=lambda_i,
+                eta=~eta,
+                iteration=_mode_factor_iteration(iteration),
+            )
+            value = float(np.clip(value, -x_bound, x_bound))
+            mob.move_to(axes.c2p(value, 0))
+
+        update_dot(dot)
+        dot.add_updater(update_dot)
+        dots.add(dot)
+
+    axis_group = VGroup(axes, zero_tick, zero_label, dots)
+    title.next_to(axis_group, UP, buff=SMALL_BUFF)
+    iteration_readout.align_to(axes, LEFT)
+    iteration_readout.set_y(title.get_y())
+    return VGroup(title, iteration_readout, axis_group)
 
 
 def _bar_chart_for_response(
