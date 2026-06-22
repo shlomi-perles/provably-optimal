@@ -16,6 +16,7 @@ SLIDER_FILL_STROKE_WIDTH = 7
 SLIDER_TRACK_OPACITY = 0.45
 SLIDER_TICK_OPACITY = 0.58
 SLIDER_TICK_STROKE_WIDTH = 1.0
+type EndpointLabels = tuple[str, str]
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,7 @@ class ValueSlider(VGroup):
         value_font_size: float | None = None,
         tick_values: Iterable[float] = (),
         show_endpoint_labels: bool = False,
+        endpoint_label_texts: EndpointLabels | None = None,
     ) -> None:
         theme = get_active_theme()
         label_size = label_font_size if label_font_size is not None else theme.typography.caption
@@ -79,9 +81,13 @@ class ValueSlider(VGroup):
         ticks = VGroup(*(self._tick(track, tracker_value, spec) for tracker_value in tick_values))
         mobjects = [label, track, ticks, fill, knob, value]
         if show_endpoint_labels:
+            endpoint_label_texts = endpoint_label_texts or (
+                f"{spec.minimum:.{spec.decimals}f}",
+                f"{spec.maximum:.{spec.decimals}f}",
+            )
             endpoint_labels = VGroup(
-                self._endpoint_label(spec.minimum, spec.decimals, value_size),
-                self._endpoint_label(spec.maximum, spec.decimals, value_size),
+                self._endpoint_label(endpoint_label_texts[0], value_size),
+                self._endpoint_label(endpoint_label_texts[1], value_size),
             )
             endpoint_labels[0].next_to(track.get_start(), DOWN, buff=SMALL_BUFF)
             endpoint_labels[0].align_to(track, LEFT)
@@ -91,8 +97,8 @@ class ValueSlider(VGroup):
         super().__init__(*mobjects)
 
     @staticmethod
-    def _endpoint_label(value: float, decimals: int, font_size: float) -> MathTex:
-        return MathTex(f"{value:.{decimals}f}", color=C_MUTED, font_size=font_size)
+    def _endpoint_label(text: str, font_size: float) -> MathTex:
+        return MathTex(text, color=C_MUTED, font_size=font_size)
 
     @staticmethod
     def _tick(track: Line, tracker_value: float, spec: SliderSpec) -> Line:

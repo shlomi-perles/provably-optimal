@@ -97,35 +97,40 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOTTOM_AXIS_OPACITY,
         )
 
-        base_x_center = 0.5 * (x_min + x_max)
-        base_y_center = 0.5 * (y_min + y_max)
         base_x_span = x_max - x_min
         base_y_span = y_max - y_min
+        zoom_anchor_x = float(x_star)
+        zoom_anchor_y = f_star
+        zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
+        zoom_anchor_y_ratio = (zoom_anchor_y - y_min) / base_y_span
+
+        def view_scale_factor() -> float:
+            return max(float(~view_scale), ZERO_AXIS_EPSILON)
 
         def view_limits() -> tuple[float, float, float, float]:
-            scale = max(float(~view_scale), ZERO_AXIS_EPSILON)
-            half_x = 0.5 * base_x_span * scale
-            half_y = 0.5 * base_y_span * scale
+            scale = view_scale_factor()
+            x_span = base_x_span * scale
+            y_span = base_y_span * scale
+            view_x_min = zoom_anchor_x - zoom_anchor_x_ratio * x_span
+            view_y_min = zoom_anchor_y - zoom_anchor_y_ratio * y_span
             return (
-                base_x_center - half_x,
-                base_x_center + half_x,
-                base_y_center - half_y,
-                base_y_center + half_y,
+                view_x_min,
+                view_x_min + x_span,
+                view_y_min,
+                view_y_min + y_span,
             )
 
         def data_point(x: float, y: float) -> FloatArray:
             view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
             x_ratio = (x - view_x_min) / (view_x_max - view_x_min)
             y_ratio = (y - view_y_min) / (view_y_max - view_y_min)
-            return frame.get_corner(DL) + RIGHT * (frame.width * x_ratio) + UP * (frame.height * y_ratio)
+            return (
+                frame.get_corner(DL)
+                + RIGHT * (frame.width * x_ratio)
+                + UP * (frame.height * y_ratio)
+            )
 
-        def curve_for(
-            fn: Callable[[FloatArray], FloatArray],
-            *,
-            color: str,
-            width: float,
-            opacity: float = 1.0,
-        ) -> VMobject:
+        def curve_points(fn: Callable[[FloatArray], FloatArray]) -> list[FloatArray]:
             view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
             visible_xs = np.linspace(view_x_min, view_x_max, LOCAL_CURVE_SAMPLES)
             ys = fn(visible_xs)
@@ -138,57 +143,150 @@ class SecondOrderApproximation(Slide):
                 clipped_y = float(np.clip(ys[0], view_y_min, view_y_max))
                 points = [data_point(float(visible_xs[0]), clipped_y)]
                 points.append(points[0] + RIGHT * POLYLINE_FALLBACK_STEP)
+            return points
+
+        def update_curve(
+            mob: VMobject,
+            fn: Callable[[FloatArray], FloatArray],
+            *,
+            color: str,
+            width: float,
+            opacity: float = 1.0,
+        ) -> None:
+            mob.set_points_smoothly(curve_points(fn))
+            mob.set_stroke(color, width=width, opacity=opacity)
+            mob.set_z_index(LAYER_TRAJECTORY)
+
+        def curve_for(
+            fn: Callable[[FloatArray], FloatArray],
+            *,
+            color: str,
+            width: float,
+            opacity: float = 1.0,
+        ) -> VMobject:
             curve = VMobject()
-            curve.set_points_smoothly(points)
-            curve.set_stroke(color, width=width, opacity=opacity)
+            update_curve(curve, fn, color=color, width=width, opacity=opacity)
             return curve
+
+        def track_curve(
+            mob: VMobject,
+            fn: Callable[[FloatArray], FloatArray],
+            *,
+            color: str,
+            width: float,
+            opacity: float = 1.0,
+        ) -> None:
+            mob.add_updater(
+                lambda tracked: update_curve(
+                    tracked,
+                    fn,
+                    color=color,
+                    width=width,
+                    opacity=opacity,
+                )
+            )
+
+        def update_dash(
+            dash: VMobject,
+            fn: Callable[[FloatArray], FloatArray],
+            x_start: float,
+            x_end: float,
+            *,
+            color: str,
+            width: float,
+        ) -> None:
+            _, _, view_y_min, view_y_max = view_limits()
+            sample_count = max(2, LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT)
+            dash_xs = np.linspace(x_start, x_end, sample_count)
+            dash_ys = fn(dash_xs)
+            mask = np.isfinite(dash_ys) & (dash_ys >= view_y_min) & (dash_ys <= view_y_max)
+            points = [
+                data_point(float(x), float(y))
+                for x, y in zip(dash_xs[mask], dash_ys[mask], strict=True)
+            ]
+            if len(points) < 2:
+                dash.clear_points()
+                dash.set_stroke(color, width=width, opacity=0)
+                return
+            dash.set_points_smoothly(points)
+            dash.set_stroke(color, width=width)
+            dash.set_z_index(LAYER_TRAJECTORY)
 
         def dashed_curve_for(
             fn: Callable[[FloatArray], FloatArray],
             *,
             color: str,
             width: float,
-        ) -> DashedVMobject:
-            return DashedVMobject(
-                curve_for(fn, color=color, width=width),
-                num_dashes=LOCAL_MODEL_DASH_COUNT,
-            ).set_z_index(LAYER_TRAJECTORY)
-
-        def track_with_factory(mob: VMobject, factory: Callable[[], VMobject]) -> None:
-            mob.add_updater(lambda tracked: tracked.become(factory()))
-
-        def true_curve_factory() -> VMobject:
-            return curve_for(f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH).set_z_index(
+        ) -> VGroup:
+            curve = VGroup(*(VMobject() for _ in range(LOCAL_MODEL_DASH_COUNT))).set_z_index(
                 LAYER_TRAJECTORY
             )
+            update_dashed_curve(curve, fn, color=color, width=width)
+            return curve
 
-        def local_model_factory() -> DashedVMobject:
-            return dashed_curve_for(
-                lambda values: model_values(values, x_t, h_t),
-                color=C_GREEN,
-                width=LOCAL_MODEL_STROKE_WIDTH,
+        def update_dashed_curve(
+            mob: VGroup,
+            fn: Callable[[FloatArray], FloatArray],
+            *,
+            color: str,
+            width: float,
+        ) -> None:
+            view_x_min, view_x_max, _, _ = view_limits()
+            dash_span = (view_x_max - view_x_min) / (2 * len(mob) - 1)
+            for index, dash in enumerate(mob):
+                dash_x_start = view_x_min + 2 * index * dash_span
+                update_dash(
+                    dash,
+                    fn,
+                    dash_x_start,
+                    min(dash_x_start + dash_span, view_x_max),
+                    color=color,
+                    width=width,
+                )
+
+        def track_dashed_curve(
+            mob: VGroup,
+            fn: Callable[[FloatArray], FloatArray],
+            *,
+            color: str,
+            width: float,
+        ) -> None:
+            mob.add_updater(
+                lambda tracked: update_dashed_curve(
+                    tracked,
+                    fn,
+                    color=color,
+                    width=width,
+                )
             )
 
-        def lower_model_factory() -> VMobject:
-            return curve_for(
-                lambda values: model_values(values, float(~alpha_anchor), float(~alpha)),
-                color=C_BLUE,
-                width=LOCAL_BOUND_STROKE_WIDTH,
-                opacity=LOCAL_BOUND_OPACITY,
-            ).set_z_index(LAYER_TRAJECTORY)
+        def local_model_values(values: FloatArray) -> FloatArray:
+            return model_values(values, x_t, h_t)
 
-        def upper_model_factory() -> VMobject:
-            return curve_for(
-                lambda values: model_values(values, float(~beta_anchor), float(~beta)),
-                color=C_ORANGE,
-                width=LOCAL_BOUND_STROKE_WIDTH,
-                opacity=LOCAL_BOUND_OPACITY,
-            ).set_z_index(LAYER_TRAJECTORY)
+        def lower_model_values(values: FloatArray) -> FloatArray:
+            return model_values(values, float(~alpha_anchor), float(~alpha))
 
-        true_curve = true_curve_factory()
-        local_model = local_model_factory()
-        lower_model = lower_model_factory()
-        upper_model = upper_model_factory()
+        def upper_model_values(values: FloatArray) -> FloatArray:
+            return model_values(values, float(~beta_anchor), float(~beta))
+
+        true_curve = curve_for(f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
+        local_model = dashed_curve_for(
+            local_model_values,
+            color=C_GREEN,
+            width=LOCAL_MODEL_STROKE_WIDTH,
+        )
+        lower_model = curve_for(
+            lower_model_values,
+            color=C_BLUE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        upper_model = curve_for(
+            upper_model_values,
+            color=C_ORANGE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
         local_marker_radius = frame.height * SECOND_ORDER_MARKER_FRAME_HEIGHT_RATIO
 
         def tracked_dot(
@@ -206,7 +304,7 @@ class SecondOrderApproximation(Slide):
 
         def bottom_tick(x_fn: Callable[[], float], label: str, *, color: str) -> VGroup:
             _, _, view_y_min, view_y_max = view_limits()
-            tick_height = BOTTOM_TICK_HEIGHT_RATIO * (view_y_max - view_y_min)
+            tick_height = BOTTOM_TICK_HEIGHT_RATIO * base_y_span
             tick = Line(data_point(x_fn(), view_y_min), data_point(x_fn(), view_y_min + tick_height))
             tick.set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
             tex = MathTex(label, color=color)
@@ -215,14 +313,14 @@ class SecondOrderApproximation(Slide):
             group = VGroup(tick, tex).set_z_index(LAYER_MARKERS)
 
             def update_tick(mob: VGroup) -> None:
-                _, _, current_y_min, current_y_max = view_limits()
-                current_tick_height = BOTTOM_TICK_HEIGHT_RATIO * (current_y_max - current_y_min)
+                _, _, current_y_min, _ = view_limits()
                 mob[0].put_start_and_end_on(
                     data_point(x_fn(), current_y_min),
-                    data_point(x_fn(), current_y_min + current_tick_height),
+                    data_point(x_fn(), current_y_min + tick_height),
                 )
                 mob[0].set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
-                mob[1].next_to(mob[0], DOWN, buff=SMALL_BUFF)
+                mob[1].scale_to_fit_height(TICK_LABEL_TEX_SCALE * mob[0].height)
+                mob[1].next_to(mob[0], DOWN, buff=SMALL_BUFF / view_scale_factor())
 
             group.add_updater(update_tick)
             return group
@@ -242,16 +340,50 @@ class SecondOrderApproximation(Slide):
             mob.add_updater(lambda label_mob: label_mob.next_to(dot, direction))
             return mob
 
-        def vertical_guide_factory(
+        def update_vertical_guide(
+            mob: VGroup,
             x_fn: Callable[[], float],
             *,
             color: str,
             opacity: float,
-        ) -> DashedLine:
+        ) -> None:
             _, _, current_y_min, current_y_max = view_limits()
-            line = DashedLine(data_point(x_fn(), current_y_min), data_point(x_fn(), current_y_max), color=color)
-            line.set_stroke(width=LOCAL_VERTICAL_GUIDE_STROKE_WIDTH, opacity=opacity)
-            return line.set_z_index(LAYER_TRAJECTORY)
+            dash_span = (current_y_max - current_y_min) / (2 * len(mob) - 1)
+            x_value = x_fn()
+            for index, dash in enumerate(mob):
+                y_start = current_y_min + 2 * index * dash_span
+                dash.put_start_and_end_on(
+                    data_point(x_value, y_start),
+                    data_point(x_value, min(y_start + dash_span, current_y_max)),
+                )
+                dash.set_stroke(color, width=LOCAL_VERTICAL_GUIDE_STROKE_WIDTH, opacity=opacity)
+
+        def vertical_guide(
+            x_fn: Callable[[], float],
+            *,
+            color: str,
+            opacity: float,
+        ) -> VGroup:
+            dash_count = max(2, LOCAL_MODEL_DASH_COUNT // 4)
+            guide = VGroup(*(Line() for _ in range(dash_count))).set_z_index(LAYER_TRAJECTORY)
+            update_vertical_guide(guide, x_fn, color=color, opacity=opacity)
+            return guide
+
+        def track_vertical_guide(
+            mob: VGroup,
+            x_fn: Callable[[], float],
+            *,
+            color: str,
+            opacity: float,
+        ) -> None:
+            mob.add_updater(
+                lambda tracked: update_vertical_guide(
+                    tracked,
+                    x_fn,
+                    color=color,
+                    opacity=opacity,
+                )
+            )
 
         x_t_dot = tracked_dot(lambda: x_t, lambda: f_t, color=C_YELLOW, radius=local_marker_radius)
         newton_dot = tracked_dot(lambda: x_next, lambda: y_next, color=C_GREEN, radius=local_marker_radius)
@@ -276,31 +408,15 @@ class SecondOrderApproximation(Slide):
             direction=DR,
             color=C_TEXT,
         )
-        x_line = vertical_guide_factory(
+        x_line = vertical_guide(
             lambda: x_t,
             color=C_YELLOW,
             opacity=LOCAL_CURRENT_GUIDE_OPACITY,
         )
-        next_line = vertical_guide_factory(
+        next_line = vertical_guide(
             lambda: x_next,
             color=C_GREEN,
             opacity=LOCAL_NEXT_GUIDE_OPACITY,
-        )
-        track_with_factory(
-            x_line,
-            lambda: vertical_guide_factory(
-                lambda: x_t,
-                color=C_YELLOW,
-                opacity=LOCAL_CURRENT_GUIDE_OPACITY,
-            ),
-        )
-        track_with_factory(
-            next_line,
-            lambda: vertical_guide_factory(
-                lambda: x_next,
-                color=C_GREEN,
-                opacity=LOCAL_NEXT_GUIDE_OPACITY,
-            ),
         )
 
         def bracket_geometry() -> tuple[float, float]:
@@ -367,20 +483,44 @@ class SecondOrderApproximation(Slide):
             y_beta = float(model_values(np.array([x_beta]), anchor, value)[0])
             return float(x_beta), float(y_beta)
 
-        def x_marker(x: float, y: float, *, color: str) -> VGroup:
+        def update_x_marker(
+            mob: VGroup,
+            point_fn: Callable[[], tuple[float, float]],
+            *,
+            color: str,
+        ) -> None:
+            x, y = point_fn()
             center_point = data_point(x, y)
-            size = frame.height * X_MARKER_FRAME_HEIGHT_RATIO
-            marker = VGroup(
-                Line(center_point + (LEFT + DOWN) * size / 2, center_point + (RIGHT + UP) * size / 2),
-                Line(center_point + (LEFT + UP) * size / 2, center_point + (RIGHT + DOWN) * size / 2),
+            size = frame.height * X_MARKER_FRAME_HEIGHT_RATIO / view_scale_factor()
+            endpoints = (
+                (
+                    center_point + (LEFT + DOWN) * size / 2,
+                    center_point + (RIGHT + UP) * size / 2,
+                ),
+                (
+                    center_point + (LEFT + UP) * size / 2,
+                    center_point + (RIGHT + DOWN) * size / 2,
+                ),
             )
-            marker.set_stroke(color, width=X_MARKER_STROKE_WIDTH, opacity=X_MARKER_OPACITY)
-            return marker.set_z_index(LAYER_MARKERS)
+            for line, (start, end) in zip(mob, endpoints, strict=True):
+                line.put_start_and_end_on(start, end)
+            mob.set_stroke(color, width=X_MARKER_STROKE_WIDTH, opacity=X_MARKER_OPACITY)
 
-        alpha_marker = x_marker(*alpha_minimum(), color=C_BLUE)
-        beta_marker = x_marker(*beta_minimum(), color=C_ORANGE)
-        track_with_factory(alpha_marker, lambda: x_marker(*alpha_minimum(), color=C_BLUE))
-        track_with_factory(beta_marker, lambda: x_marker(*beta_minimum(), color=C_ORANGE))
+        def x_marker(point_fn: Callable[[], tuple[float, float]], *, color: str) -> VGroup:
+            marker = VGroup(Line(), Line()).set_z_index(LAYER_MARKERS)
+            update_x_marker(marker, point_fn, color=color)
+            return marker
+
+        def track_x_marker(
+            mob: VGroup,
+            point_fn: Callable[[], tuple[float, float]],
+            *,
+            color: str,
+        ) -> None:
+            mob.add_updater(lambda tracked: update_x_marker(tracked, point_fn, color=color))
+
+        alpha_marker = x_marker(alpha_minimum, color=C_BLUE)
+        beta_marker = x_marker(beta_minimum, color=C_ORANGE)
         plot = VGroup(
             frame,
             bottom_axis,
@@ -421,33 +561,34 @@ class SecondOrderApproximation(Slide):
         def plot_legend_entry(tex: str, *, color: str, width: float, dashed: bool = False) -> VGroup:
             label = color_formula(theme_math(tex, color=C_TEXT, typography="caption"))
             sample_width = frame.width * LOCAL_LEGEND_SAMPLE_FRAME_WIDTH_RATIO
-            sample = DashedLine(ORIGIN, RIGHT * sample_width, color=color) if dashed else Line(ORIGIN, RIGHT * sample_width)
+            sample = (
+                DashedLine(ORIGIN, RIGHT * sample_width, color=color)
+                if dashed
+                else Line(ORIGIN, RIGHT * sample_width)
+            )
             sample.set_stroke(color, width=width)
             return VGroup(sample, label).arrange(RIGHT, buff=SMALL_BUFF)
 
         f_legend = plot_legend_entry(r"f(x)", color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
         hessian_legend = plot_legend_entry(
-            r"\begin{aligned}"
-            r"f(x_t)&+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
-            r"&+\frac{1}{2}(x-x_t)^\top\nabla^2 f(x_t)(x-x_t)"
-            r"\end{aligned}",
+            r"m_{\nabla^2}(x)=f(x_t)"
+            r"+\left\langle\nabla f(x_t),x-x_t\right\rangle"
+            r"+\frac{1}{2}(x-x_t)^\top\nabla^2 f(x_t)(x-x_t)",
             color=C_GREEN,
             width=LOCAL_MODEL_STROKE_WIDTH,
             dashed=True,
         )
         alpha_legend = plot_legend_entry(
-            r"\begin{aligned}"
-            r"f(x_t)&+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
-            r"&+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2"
-            r"\end{aligned}",
+            r"m_{\alpha}(x)=f(x_t)"
+            r"+\left\langle\nabla f(x_t),x-x_t\right\rangle"
+            r"+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2",
             color=C_BLUE,
             width=LOCAL_BOUND_STROKE_WIDTH,
         )
         beta_legend = plot_legend_entry(
-            r"\begin{aligned}"
-            r"f(x_t)&+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
-            r"&+\frac{\beta}{2}\left\|x-x_t\right\|_2^2"
-            r"\end{aligned}",
+            r"m_{\beta}(x)=f(x_t)"
+            r"+\left\langle\nabla f(x_t),x-x_t\right\rangle"
+            r"+\frac{\beta}{2}\left\|x-x_t\right\|_2^2",
             color=C_ORANGE,
             width=LOCAL_BOUND_STROKE_WIDTH,
         )
@@ -457,8 +598,9 @@ class SecondOrderApproximation(Slide):
             alpha_legend,
             beta_legend,
         ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
+        legend_available_width = frame.width - 2 * PANEL_BUFF
         legend_scale = min(
-            frame.width * LOCAL_LEGEND_FRAME_WIDTH_RATIO / plot_legend.width,
+            legend_available_width / plot_legend.width,
             frame.height * LOCAL_LEGEND_FRAME_HEIGHT_RATIO / plot_legend.height,
             1.0,
         )
@@ -479,26 +621,13 @@ class SecondOrderApproximation(Slide):
                 LAYER_MARKERS
             )
 
-        plot_legend_background = legend_background_for(1)
+        legend_backgrounds = tuple(
+            legend_background_for(entry_count)
+            for entry_count in range(1, len(plot_legend.submobjects) + 1)
+        )
+        plot_legend_background = legend_backgrounds[0]
         plot_legend.set_z_index(LAYER_MARKERS + 1)
         plot.add(plot_legend_background, plot_legend)
-        tracked_mobjects = (
-            x_t_dot,
-            newton_dot,
-            star_dot,
-            x_t_tick,
-            next_tick,
-            x_t_value,
-            star_label,
-            x_line,
-            next_line,
-            delta_bracket,
-            delta_label,
-            alpha_marker,
-            beta_marker,
-        )
-        for mob in tracked_mobjects:
-            mob.suspend_updating()
 
         definition_template = TexTemplate()
         definition_template.add_to_preamble(r"\usepackage{amsthm}")
@@ -550,6 +679,7 @@ class SecondOrderApproximation(Slide):
         sidebar_background = right_panel[0]
 
         zoom_out_scale = 2.0
+        anchor_sweep_x = float(x_star + 2 * abs(x_star - x_t))
 
         self.play(
             Write(title),
@@ -563,9 +693,7 @@ class SecondOrderApproximation(Slide):
             Write(x_t_value),
             Write(f_legend),
         )
-        for mob in (x_t_dot, x_t_tick, x_t_value):
-            mob.resume_updating()
-        track_with_factory(true_curve, true_curve_factory)
+        track_curve(true_curve, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
         self.next_slide()
 
         self.play(
@@ -578,43 +706,64 @@ class SecondOrderApproximation(Slide):
             Write(next_line),
             Write(delta_bracket),
             Write(delta_label),
-            plot_legend_background.animate.become(legend_background_for(2)),
+            FadeOut(legend_backgrounds[0]),
+            FadeIn(legend_backgrounds[1]),
             Write(hessian_legend),
         )
-        for mob in (
-            newton_dot,
-            star_dot,
-            next_tick,
-            star_label,
+        track_dashed_curve(
+            local_model,
+            local_model_values,
+            color=C_GREEN,
+            width=LOCAL_MODEL_STROKE_WIDTH,
+        )
+        track_vertical_guide(
             x_line,
+            lambda: x_t,
+            color=C_YELLOW,
+            opacity=LOCAL_CURRENT_GUIDE_OPACITY,
+        )
+        track_vertical_guide(
             next_line,
-            delta_bracket,
-            delta_label,
-        ):
-            mob.resume_updating()
-        track_with_factory(local_model, local_model_factory)
+            lambda: x_next,
+            color=C_GREEN,
+            opacity=LOCAL_NEXT_GUIDE_OPACITY,
+        )
         self.next_slide()
 
         self.play(
             Write(lower_model),
             Write(alpha_marker),
             Write(alpha_definition),
-            plot_legend_background.animate.become(legend_background_for(3)),
+            FadeOut(legend_backgrounds[1]),
+            FadeIn(legend_backgrounds[2]),
             Write(alpha_legend),
         )
-        alpha_marker.resume_updating()
-        track_with_factory(lower_model, lower_model_factory)
+        track_curve(
+            lower_model,
+            lower_model_values,
+            color=C_BLUE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
         self.next_slide()
 
         self.play(Write(upper_model), Write(beta_marker))
-        beta_marker.resume_updating()
-        track_with_factory(upper_model, upper_model_factory)
+        track_curve(
+            upper_model,
+            upper_model_values,
+            color=C_ORANGE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
         self.next_slide()
 
         self.play(beta @ LOCAL_BETA_INITIAL)
         self.play(
             Write(beta_definition),
-            plot_legend_background.animate.become(legend_background_for(4)),
+            FadeOut(legend_backgrounds[2]),
+            FadeIn(legend_backgrounds[3]),
             Write(beta_legend),
         )
         self.next_slide()
@@ -622,13 +771,13 @@ class SecondOrderApproximation(Slide):
         self.play(view_scale @ zoom_out_scale)
         self.next_slide()
 
-        self.play(beta_anchor @ float(x_star))
+        self.play(beta_anchor @ anchor_sweep_x)
         self.next_slide()
 
         self.play(beta_anchor @ x_t)
         self.next_slide()
 
-        self.play(alpha_anchor @ float(x_star))
+        self.play(alpha_anchor @ anchor_sweep_x)
         self.next_slide()
 
         self.play(alpha_anchor @ x_t)

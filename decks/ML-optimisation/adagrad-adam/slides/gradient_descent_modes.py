@@ -10,6 +10,7 @@ class GradientDescentModes(Slide):
 
     def construct(self) -> None:
         title = _start_slide(self, "Gradient descent is a scalar compromise")
+        self.region.update(left=title.get_left(), right=title.get_right())
         matrix, _ = _rotated_quadratic_matrix()
         eigenvalues, _ = _quadratic_eigendecomposition(matrix)
         alpha, beta = float(eigenvalues[0]), float(eigenvalues[-1])
@@ -65,28 +66,19 @@ class GradientDescentModes(Slide):
         rule = theme_math(
             r"x_{t+1}-x^\star=\sum_i(1-\eta\lambda_i)^{t+1}\alpha_i v_i",
         )
-        modes = theme_math(r"r_i=1-\eta\lambda_i")
         energy = theme_math(
             r"f(x_t)-f_\star=\frac12\sum_i\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}",
         )
-        rho = VGroup(
-            theme_math(r"\rho_{\mathrm{GD}}(\eta)=\max\{|1-\eta\alpha|,\ |1-\eta\beta|\}="),
-            DN(
-                lambda: max(abs(1.0 - ~eta * alpha), abs(1.0 - ~eta * beta)),
-                num_decimal_places=3,
-            ),
-        ).arrange(RIGHT, buff=SMALL_BUFF)
-        factors = VGroup(
-            VGroup(
-                theme_math(r"1-\eta\alpha=", color=C_BLUE, typography="caption"),
-                DN(lambda: 1.0 - ~eta * alpha, num_decimal_places=3),
-            ).arrange(RIGHT, buff=SMALL_BUFF),
-            VGroup(
-                theme_math(r"1-\eta\beta=", color=C_ORANGE, typography="caption"),
-                DN(lambda: 1.0 - ~eta * beta, num_decimal_places=3),
-            ).arrange(RIGHT, buff=SMALL_BUFF),
-        ).arrange(RIGHT, buff=MED_SMALL_BUFF)
-        equations = _formula_stack(rule, modes, energy, rho, factors, buff=SMALL_BUFF)
+        eta_star = theme_math(r"\eta^\star=\frac{2}{\alpha+\beta}")
+        rho = theme_math(
+            r"\rho=\max_{\lambda\in\{\alpha,\beta\}}|1-\eta\lambda|",
+        )
+        rate_bound = theme_math(
+            r"f(x_t)-f_\star\le"
+            r"(\rho_\star^{\mathrm{GD}})^{2t}"
+            r"\bigl(f(x_0)-f_\star\bigr)",
+        )
+        equations = _formula_stack(rule, energy, eta_star, rho, rate_bound, buff=SMALL_BUFF)
         _color_text_parts(
             equations,
             {
@@ -95,7 +87,8 @@ class GradientDescentModes(Slide):
                 r"\alpha_i": C_GREEN,
                 r"\alpha": C_BLUE,
                 r"\beta": C_ORANGE,
-                r"r_i": C_GREEN,
+                r"\lambda": C_ORANGE,
+                r"\rho": C_GREEN,
             },
         )
         bottom_left.scale_and_place(_themed_box(equations), buff=SMALL_BUFF)

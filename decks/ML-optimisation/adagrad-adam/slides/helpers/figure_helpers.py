@@ -166,13 +166,11 @@ MODE_CHART_BAR_MIN_HEIGHT_RATIO = 1 / 200
 MODE_CHART_BAR_PLACEHOLDER_RATIO = 1 / 100
 MODE_CHART_BAR_OPACITY = 0.88
 MODE_CHART_TAG_OFFSET = RIGHT * 0.60 + DOWN * 0.15
-MODE_CHART_READOUT_OFFSET = LEFT * 0.55 + DOWN * 0.18
 MODE_INITIAL_ETA_SUM_FACTOR = 0.54
 MODE_OVERSHOOT_ETA_NUMERATOR = 2.01
 MODE_FACTOR_INTERIOR_DOT_COUNT = 3
 MODE_FACTOR_DOT_INITIAL_STEP = 1
 MODE_FACTOR_DOT_FINAL_STEP = 80
-MODE_FACTOR_DOT_STEP_STRIDE = 2
 MODE_FACTOR_DOT_RANDOM_SEED = 24
 MODE_FACTOR_AXIS_HEIGHT_RATIO = 1 / 5
 MODE_FACTOR_DOT_RADIUS_RATIO = 1 / 26
@@ -940,6 +938,7 @@ def _eta_slider(tracker: VT, spec: SliderSpec, eigenvalues: FloatArray) -> VGrou
             spec.maximum,
         ),
         show_endpoint_labels=True,
+        endpoint_label_texts=(f"{spec.minimum:g}", f"{spec.maximum:.1f}"),
     )
 
 
@@ -1034,7 +1033,7 @@ def _mode_multiplier_chart(
     lambda_i: float,
     *,
     color: str,
-    mode_index: int,
+    mode_label: str,
     mode_tag: str,
     width: float,
     height: float,
@@ -1134,7 +1133,7 @@ def _mode_multiplier_chart(
     y_label = theme_math(
         r"(1-",
         r"\eta",
-        rf"\lambda_{mode_index}",
+        mode_label,
         r")^t",
         color=C_TEXT,
         typography="caption",
@@ -1142,15 +1141,10 @@ def _mode_multiplier_chart(
     y_label[1].set_color(C_ETA)
     y_label[2].set_color(color)
     y_label.rotate(PI / 2)
-    y_label.scale_to_fit_height(frame.height - 2 * SMALL_BUFF)
+    y_label.scale_to_fit_height(frame.height / 2)
     y_label.next_to(frame, LEFT, buff=SMALL_BUFF)
     tag = theme_math(mode_tag, color=color, typography="caption")
     tag.move_to(frame.get_corner(UL) + MODE_CHART_TAG_OFFSET)
-    r_readout = VGroup(
-        theme_math(r"r_i=", color=C_MUTED, typography="caption"),
-        DN(lambda: 1.0 - ~eta * lambda_i, num_decimal_places=3),
-    ).arrange(RIGHT, buff=SMALL_BUFF)
-    r_readout.move_to(frame.get_corner(UR) + MODE_CHART_READOUT_OFFSET)
     x_label = Caption(r"Iteration $t$") if show_x_label else VGroup()
     if show_x_label:
         x_label.next_to(frame, DOWN, buff=SMALL_BUFF)
@@ -1163,7 +1157,6 @@ def _mode_multiplier_chart(
         bars,
         y_label,
         tag,
-        r_readout,
         x_label,
     )
 
@@ -1174,8 +1167,8 @@ def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -
         eta,
         float(eigenvalues[0]),
         color=C_BLUE,
-        mode_index=1,
-        mode_tag=r"\lambda_1=\alpha",
+        mode_label=r"\lambda_{\min}",
+        mode_tag=r"\lambda_{\min}=\alpha",
         width=width,
         height=height,
         show_x_label=False,
@@ -1184,8 +1177,8 @@ def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -
         eta,
         float(eigenvalues[-1]),
         color=C_ORANGE,
-        mode_index=2,
-        mode_tag=r"\lambda_2=\beta",
+        mode_label=r"\lambda_{\max}",
+        mode_tag=r"\lambda_{\max}=\beta",
         width=width,
         height=height,
         show_x_label=True,
@@ -1213,24 +1206,34 @@ def _mode_factor_axis_bound(
     return float(np.max(np.abs(powers)))
 
 
-def _mode_factor_value(*, lambda_i: float, eta: float, iteration: int) -> float:
-    return float((1.0 - eta * lambda_i) ** iteration)
-
-
-def _mode_factor_iteration(iteration: VT) -> int:
-    value = ~iteration
-    if value <= MODE_FACTOR_DOT_INITIAL_STEP:
-        return MODE_FACTOR_DOT_INITIAL_STEP
-    even_iteration = MODE_FACTOR_DOT_STEP_STRIDE * round(
-        value / MODE_FACTOR_DOT_STEP_STRIDE
-    )
-    return int(
+def _mode_factor_power(iteration: VT) -> float:
+    return float(
         np.clip(
-            even_iteration,
+            ~iteration,
             MODE_FACTOR_DOT_INITIAL_STEP,
             MODE_FACTOR_DOT_FINAL_STEP,
         )
     )
+
+
+def _mode_factor_display_iteration(iteration: VT) -> int:
+    return round(_mode_factor_power(iteration))
+
+
+def _mode_factor_value(*, lambda_i: float, eta: float, iteration: float) -> float:
+    factor = 1.0 - eta * lambda_i
+    if factor >= 0:
+        return float(factor**iteration)
+
+    nearest_integer = round(iteration)
+    if abs(iteration - nearest_integer) <= ZERO_AXIS_EPSILON:
+        return float(factor**nearest_integer)
+
+    return float((abs(factor) ** iteration) * np.cos(PI * iteration))
+
+
+def _mode_factor_iteration(iteration: VT) -> int:
+    return _mode_factor_display_iteration(iteration)
 
 
 def _mode_factor_axis(
@@ -1287,13 +1290,13 @@ def _mode_factor_axis(
 
     iteration_label = theme_math("t=", color=C_YELLOW, typography="caption")
     iteration_value = Integer(
-        _mode_factor_iteration(iteration),
+        _mode_factor_display_iteration(iteration),
         color=C_TEXT,
         font_size=get_active_theme().typography.caption,
     )
 
     def update_iteration_value(mob: Integer) -> None:
-        mob.set_value(_mode_factor_iteration(iteration))
+        mob.set_value(_mode_factor_display_iteration(iteration))
 
     iteration_value.add_updater(update_iteration_value)
     iteration_readout = VGroup(iteration_label, iteration_value).arrange(
@@ -1313,7 +1316,7 @@ def _mode_factor_axis(
             value = _mode_factor_value(
                 lambda_i=lambda_i,
                 eta=~eta,
-                iteration=_mode_factor_iteration(iteration),
+                iteration=_mode_factor_power(iteration),
             )
             value = float(np.clip(value, -x_bound, x_bound))
             mob.move_to(axes.c2p(value, 0))
