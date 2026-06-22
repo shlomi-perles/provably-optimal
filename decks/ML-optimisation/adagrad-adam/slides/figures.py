@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from itertools import pairwise
-from typing import Callable, Sequence
 
 import contourpy
 import numpy as np
@@ -32,18 +32,53 @@ from manim import (
     ImageMobject,
     Line,
     MathTex,
-    Mobject,
     PI,
     Rectangle,
-    SurroundingRectangle,
-    Title,
     VGroup,
     VMobject,
     Write,
     always_redraw,
 )
 from simplex import Caption, DN, Slide, VT, color_substrings, get_active_theme
-from simplex.engine.region import Region
+
+from slides.controls import SliderSpec, ValueSlider
+from slides.plotting import (
+    axes_limits as _axes_limits,
+    axes_point as _axes_point,
+    blue_alpha_heatmap as _blue_alpha_heatmap,
+    inside_axes as _inside_axes,
+    make_axes as _make_axes,
+    normalize_heat as _normalize_heat,
+    plot_frame as _plot_frame,
+)
+from slides.style import (
+    C_BLUE,
+    C_CONTOUR,
+    C_FRAME,
+    C_GRID,
+    C_GREEN,
+    C_MUTED,
+    C_ORANGE,
+    C_PANEL_DEEP,
+    C_PURPLE,
+    C_RED,
+    C_TEAL,
+    C_TEXT,
+    C_YELLOW,
+    LAYER_CONTOUR,
+    LAYER_FRAME,
+    LAYER_HEATMAP,
+    LAYER_MARKERS,
+    LAYER_TRAJECTORY,
+    accent_rule as _accent_rule,
+    color_text_parts as _color_text_parts,
+    formula_stack as _formula_stack,
+    split_rows as _split_rows,
+    split_weighted as _split_weighted,
+    start_slide as _start_slide,
+    themed_box as _themed_box,
+    panel_shell as _panel_shell,
+)
 
 FloatArray = npt.NDArray[np.float64]
 
@@ -53,44 +88,11 @@ BASE_THETA_DEG = 28.0
 BASE_INITIAL_VECTOR = np.array([5.05, 1.42], dtype=np.float64)
 T_STEPS = np.arange(0, 151, dtype=np.float64)
 
-C_TEXT = "#F8FAFC"
-C_MUTED = "#94A3B8"
-C_GRID = "#3A4553"
-C_FRAME = "#BFC9D2"
-C_PANEL = "#18212F"
-C_PANEL_SOFT = "#101827"
-C_PANEL_DEEP = "#0B1220"
-C_CONTOUR = "#91BBD0"
-C_BLUE = "#3D8FC7"
-C_ORANGE = "#FF6600"
-C_GREEN = "#34D399"
-C_PURPLE = "#A78BFA"
-C_RED = "#F87171"
-C_TEAL = "#2DD4BF"
-C_YELLOW = "#FFD700"
-HEATMAP_BLUE = "#3D8FC7"
-HEATMAP_MAX_ALPHA = 0.42
-LAYER_HEATMAP = 0
-LAYER_CONTOUR = 1
-LAYER_TRAJECTORY = 2
-LAYER_FRAME = 2.5
-LAYER_MARKERS = 3
-
-
 @dataclass(frozen=True, slots=True)
 class ResponseSpec:
     title: str
     method: str
     eta: float
-
-
-@dataclass(frozen=True, slots=True)
-class SliderSpec:
-    label: str
-    minimum: float
-    maximum: float
-    decimals: int
-    color: str
 
 
 def _rotation(theta_deg: float) -> FloatArray:
@@ -112,151 +114,6 @@ def _rotated_quadratic_matrix() -> tuple[FloatArray, FloatArray]:
     eigvecs = _rotation(THETA_DEG)
     matrix = eigvecs @ np.diag([MU, LAMBDA_MAX]) @ eigvecs.T
     return matrix, eigvecs
-
-
-def _start_slide(scene: Slide, title: str) -> Title:
-    scene.slide(title=title)
-    title_mob = Title(title)
-    scene.region.place(title_mob, UP)
-    scene.region.update(top=title_mob)
-    return title_mob
-
-
-def _split_weighted(region: Region, ratios: Sequence[float]) -> list[Region]:
-    total = float(sum(ratios))
-    cursor = region.left
-    pieces: list[Region] = []
-    for ratio in ratios:
-        width = region.width * ratio / total
-        next_cursor = cursor + width
-        pieces.append(
-            Region(
-                left=cursor,
-                right=next_cursor,
-                top=region.top,
-                bottom=region.bottom,
-            )
-        )
-        cursor = next_cursor
-    return pieces
-
-
-def _split_rows(region: Region, ratios: Sequence[float]) -> list[Region]:
-    total = float(sum(ratios))
-    cursor = region.top
-    pieces: list[Region] = []
-    for ratio in ratios:
-        height = region.height * ratio / total
-        next_cursor = cursor - height
-        pieces.append(
-            Region(
-                left=region.left,
-                right=region.right,
-                top=cursor,
-                bottom=next_cursor,
-            )
-        )
-        cursor = next_cursor
-    return pieces
-
-
-def _themed_box(mobject: Mobject, color: str = C_PANEL) -> VGroup:
-    box = SurroundingRectangle(mobject, buff=0.18, corner_radius=0.08)
-    box.set_fill(color, opacity=0.38)
-    box.set_stroke(C_FRAME, width=0.9, opacity=0.22)
-    return VGroup(box, mobject)
-
-
-def _panel_shell(mobject: Mobject, *, color: str = C_PANEL_SOFT, buff: float = 0.16) -> VGroup:
-    shell = SurroundingRectangle(mobject, buff=buff, corner_radius=0.08)
-    shell.set_fill(color, opacity=0.26)
-    shell.set_stroke(C_FRAME, width=0.8, opacity=0.16)
-    return VGroup(shell, mobject)
-
-
-def _accent_rule(mobject: Mobject, color: str) -> Line:
-    rule = Line(LEFT * mobject.width / 2, RIGHT * mobject.width / 2)
-    rule.set_stroke(color, width=2.4, opacity=0.92)
-    rule.next_to(mobject, UP, buff=0.08)
-    return rule
-
-
-def _formula_stack(*items: VMobject, buff: float = 0.24) -> VGroup:
-    return VGroup(*items).arrange(DOWN, aligned_edge=LEFT, buff=buff)
-
-
-def _color_text_parts(mobject: VMobject, colors: dict[str, str]) -> None:
-    if mobject.__class__ is MathTex:
-        color_substrings(mobject, colors)
-        return
-    for child in mobject.submobjects:
-        if isinstance(child, VMobject):
-            _color_text_parts(child, colors)
-
-
-def _axis_config() -> dict[str, object]:
-    return {
-        "include_ticks": False,
-        "include_numbers": False,
-        "stroke_color": C_MUTED,
-        "stroke_width": 1.4,
-        "stroke_opacity": 0.82,
-    }
-
-
-def _make_axes(
-    x_range: tuple[float, float, float],
-    y_range: tuple[float, float, float],
-    *,
-    x_length: float,
-    y_length: float,
-    preserve_unit_aspect: bool = False,
-) -> Axes:
-    if preserve_unit_aspect:
-        x_span = x_range[1] - x_range[0]
-        y_span = y_range[1] - y_range[0]
-        unit = min(x_length / x_span, y_length / y_span)
-        x_length = unit * x_span
-        y_length = unit * y_span
-    return Axes(
-        x_range=[*x_range],
-        y_range=[*y_range],
-        x_length=x_length,
-        y_length=y_length,
-        tips=False,
-        axis_config=_axis_config(),
-    )
-
-
-def _axes_limits(axes: Axes) -> tuple[float, float, float, float]:
-    return (
-        float(axes.x_range[0]),
-        float(axes.x_range[1]),
-        float(axes.y_range[0]),
-        float(axes.y_range[1]),
-    )
-
-
-def _axes_point(axes: Axes, point: FloatArray) -> FloatArray:
-    return np.asarray(axes.c2p(float(point[0]), float(point[1])), dtype=np.float64)
-
-
-def _inside_axes(axes: Axes, point: FloatArray) -> bool:
-    x_min, x_max, y_min, y_max = _axes_limits(axes)
-    return x_min <= point[0] <= x_max and y_min <= point[1] <= y_max
-
-
-def _plot_frame(axes: Axes) -> Rectangle:
-    x_min, x_max, y_min, y_max = _axes_limits(axes)
-    lower_left = axes.c2p(x_min, y_min)
-    upper_right = axes.c2p(x_max, y_max)
-    frame = Rectangle(
-        width=float(upper_right[0] - lower_left[0]),
-        height=float(upper_right[1] - lower_left[1]),
-    )
-    frame.set_stroke(C_FRAME, width=1.0, opacity=0.9)
-    frame.move_to((lower_left + upper_right) / 2)
-    return frame
 
 
 def _coordinate_grid(axes: Axes, *, step: float = 1.0) -> VGroup:
@@ -343,25 +200,6 @@ def _quadratic_values(matrix: FloatArray, x_grid: FloatArray, y_grid: FloatArray
         + 2.0 * matrix[0, 1] * x_grid * y_grid
         + matrix[1, 1] * y_grid**2
     )
-
-
-def _normalize_heat(values: FloatArray) -> FloatArray:
-    lower, upper = np.quantile(values, [0.03, 0.92])
-    normalized = np.clip((values - lower) / (upper - lower), 0, 1)
-    return normalized**0.72
-
-
-def _hex_to_rgb(color: str) -> tuple[int, int, int]:
-    raw = color.removeprefix("#")
-    return tuple(int(raw[index : index + 2], 16) for index in (0, 2, 4))
-
-
-def _blue_alpha_heatmap(values: FloatArray) -> npt.NDArray[np.uint8]:
-    intensity = (1.0 - values) ** 1.35
-    rgb = np.array(_hex_to_rgb(HEATMAP_BLUE), dtype=np.float64)
-    alpha = 255.0 * HEATMAP_MAX_ALPHA * intensity
-    channels = [np.full_like(values, channel) for channel in rgb]
-    return np.dstack([*channels, alpha]).astype(np.uint8)
 
 
 def _quadratic_heatmap(axes: Axes, matrix: FloatArray, *, width: int = 640) -> ImageMobject:
@@ -565,7 +403,7 @@ def _path_with_dots(
 
 
 def _mode_path(axes: Axes, eta: float, steps: int = 50) -> VGroup:
-    matrix, eigvecs = _rotated_quadratic_matrix()
+    _, eigvecs = _rotated_quadratic_matrix()
     x0 = np.array([6.0, 8.0], dtype=np.float64)
     eigenvalues = np.array([MU, LAMBDA_MAX], dtype=np.float64)
     coefficients = eigvecs.T @ x0
@@ -657,46 +495,16 @@ def _adagrad_coordinate_response(eta: float) -> FloatArray:
     return np.asarray(history, dtype=np.float64)
 
 
-def _slider_alpha(tracker: VT, spec: SliderSpec) -> float:
-    value = np.clip(~tracker, spec.minimum, spec.maximum)
-    return float((value - spec.minimum) / (spec.maximum - spec.minimum))
-
-
 def _eta_slider(tracker: VT, spec: SliderSpec) -> VGroup:
     theme = get_active_theme()
-    track = Line(LEFT * 1.28, RIGHT * 1.28)
-    track.set_stroke(C_MUTED, width=5, opacity=0.45)
-
-    label = MathTex(spec.label, color=spec.color, font_size=theme.typography.caption)
-    label.next_to(track, LEFT, buff=0.22)
-
-    value = DN(tracker, num_decimal_places=spec.decimals, font_size=theme.typography.caption - 2)
-    value.next_to(track, RIGHT, buff=0.22)
-    value.add_updater(lambda mob: mob.next_to(track, RIGHT, buff=0.22))
-
-    fill = always_redraw(
-        lambda: Line(
-            track.get_start(),
-            track.point_from_proportion(_slider_alpha(tracker, spec)),
-        ).set_stroke(spec.color, width=7)
+    return ValueSlider(
+        tracker,
+        spec,
+        half_length=1.28,
+        label_font_size=theme.typography.caption,
+        value_font_size=theme.typography.caption - 2,
+        tick_values=(1.0 / LAMBDA_MAX, 2.0 / (MU + LAMBDA_MAX), 2.0 / LAMBDA_MAX),
     )
-    knob = always_redraw(
-        lambda: Dot(
-            track.point_from_proportion(_slider_alpha(tracker, spec)),
-            color=spec.color,
-            radius=0.085,
-        )
-    )
-
-    ticks = VGroup()
-    for value_at_tick in (1.0 / LAMBDA_MAX, 2.0 / (MU + LAMBDA_MAX), 2.0 / LAMBDA_MAX):
-        tick_alpha = (value_at_tick - spec.minimum) / (spec.maximum - spec.minimum)
-        tick = Line(DOWN * 0.075, UP * 0.075)
-        tick.set_stroke(C_TEXT, width=1.0, opacity=0.58)
-        tick.move_to(track.point_from_proportion(float(np.clip(tick_alpha, 0, 1))))
-        ticks.add(tick)
-
-    return VGroup(label, track, ticks, fill, knob, value)
 
 
 def _mode_magnitude_chart(
@@ -844,7 +652,7 @@ def _bar_chart_for_response(
         callout.move_to(bottom[0].get_center() + RIGHT * 0.35)
         notes.add(callout)
     chart.add(notes)
-    return _panel_shell(chart, buff=0.1)
+    return _panel_shell(chart)
 
 
 class SecondOrderApproximation(Slide):
@@ -1592,10 +1400,9 @@ class AdaGradWeightedLedger(Slide):
             point = points[key]
             direction = point - center
             norm = np.linalg.norm(direction)
-            if norm == 0:
-                direction = np.array([0.0, -1.0], dtype=np.float64)
-            else:
-                direction = direction / norm
+            direction = (
+                np.array([0.0, -1.0], dtype=np.float64) if norm == 0 else direction / norm
+            )
             location = point + 0.38 * direction
             return MathTex(labels[key], color=C_TEXT, font_size=font_size).move_to(
                 axes.c2p(float(location[0]), float(location[1]))

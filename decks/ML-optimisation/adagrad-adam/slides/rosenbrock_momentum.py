@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from itertools import pairwise
 
 import contourpy
@@ -28,10 +27,34 @@ from manim import (
     VGroup,
     VMobject,
     Write,
-    YELLOW,
     always_redraw,
 )
 from simplex import Caption, DN, Slide, VT, color_substrings, get_active_theme
+
+from slides.controls import SliderSpec, ValueSlider
+from slides.plotting import (
+    axes_point as _axes_point,
+    blue_alpha_heatmap as _blue_alpha_heatmap,
+    normalize_heat as _normalize_heat,
+    plot_frame as _plot_frame,
+    sample_contour_points as _sample_contour_points,
+)
+from slides.style import (
+    C_CONTOUR,
+    C_FRAME,
+    C_MUTED,
+    C_OPTIMUM,
+    C_OPTIMUM_STROKE,
+    C_ORANGE,
+    C_PANEL,
+    C_YELLOW,
+    LAYER_CONTOUR,
+    LAYER_FRAME,
+    LAYER_HEATMAP,
+    LAYER_MARKERS,
+    LAYER_TRAJECTORY,
+    segmented_panel,
+)
 
 type FloatArray = npt.NDArray[np.float64]
 
@@ -44,35 +67,13 @@ N_STEPS = 80
 ROSEN_Y_SCALE = 3.0
 ROSEN_CURVATURE = 20.0
 
-C_CONTOUR = "#91BBD0"
-C_FRAME = "#BFC9D2"
-C_OPTIMUM = "#DDEAF2"
-C_OPTIMUM_STROKE = "#F6FBFF"
-C_PATH = "#FF6600"
+C_PATH = C_ORANGE
 C_ALPHA = C_PATH
 C_BETA = "#2F65C8"
-C_MUTED = "#94A3B8"
-C_PANEL = "#18212F"
-X_0_COLOR = YELLOW
-HEATMAP_BLUE = "#3D8FC7"
-HEATMAP_MAX_ALPHA = 0.42
+X_0_COLOR = C_YELLOW
 STEP_DOT_RADIUS = 0.018
 HEAD_DOT_RADIUS = 0.07
 MAX_POINT_NORM = 1e3
-LAYER_HEATMAP = 0
-LAYER_CONTOUR = 1
-LAYER_TRAJECTORY = 2
-LAYER_FRAME = 2.5
-LAYER_MARKERS = 3
-
-
-@dataclass(frozen=True, slots=True)
-class SliderSpec:
-    label: str
-    minimum: float
-    maximum: float
-    decimals: int
-    color: str
 
 
 class MomentumRosenbrock(Slide):
@@ -94,13 +95,13 @@ class MomentumRosenbrock(Slide):
         contours = self._make_contours(axes).set_z_index(LAYER_CONTOUR)
         trajectory = self._make_trajectory(axes, alpha, beta).set_z_index(LAYER_TRAJECTORY)
         markers = self._make_static_markers(axes).set_z_index(LAYER_MARKERS)
-        frame = self._plot_frame(axes).set_z_index(LAYER_FRAME)
+        frame = _plot_frame(axes).set_z_index(LAYER_FRAME)
         plot = Group(axes, heatmap, contours, trajectory, frame, markers)
 
         controls = self._make_controls(alpha, beta)
         plot_region, control_region = self.region.split_regions(DOWN, 2)
-        plot_region.scale_and_place(plot, buff=0.08)
-        control_region.scale_and_place(controls, buff=0.16)
+        plot_region.scale_and_place(plot)
+        control_region.scale_and_place(controls)
 
         self.play(
             Write(title),
@@ -149,8 +150,8 @@ class MomentumRosenbrock(Slide):
         y_values = np.linspace(Y_RANGE[1], Y_RANGE[0], height)
         x_grid, y_grid = np.meshgrid(x_values, y_values)
         values = np.log10(self._banana_value(np.stack([x_grid, y_grid])) + 1.0)
-        image = ImageMobject(self._blue_alpha_heatmap(self._normalize_heat(values)))
-        frame = self._plot_frame(axes)
+        image = ImageMobject(_blue_alpha_heatmap(_normalize_heat(values)))
+        frame = _plot_frame(axes)
         image.stretch_to_fit_width(frame.width)
         image.stretch_to_fit_height(frame.height)
         image.move_to(frame)
@@ -170,14 +171,16 @@ class MomentumRosenbrock(Slide):
                 if len(segment) < 2:
                     continue
                 line = VMobject()
-                line.set_points_as_corners(self._contour_points(axes, segment))
+                line.set_points_as_corners(
+                    _sample_contour_points(axes, segment, max_points=130)
+                )
                 line.set_stroke(C_CONTOUR, width=1.05, opacity=float(opacity))
                 contours.add(line)
         return contours
 
     def _make_static_markers(self, axes: Axes) -> VGroup:
-        start = Dot(self._axes_point(axes, START), color=X_0_COLOR, radius=0.08)
-        optimum = Dot(self._axes_point(axes, OPTIMUM), color=C_OPTIMUM, radius=0.08)
+        start = Dot(_axes_point(axes, START), color=X_0_COLOR, radius=0.08)
+        optimum = Dot(_axes_point(axes, OPTIMUM), color=C_OPTIMUM, radius=0.08)
         optimum.set_stroke(C_OPTIMUM_STROKE, width=2.0, opacity=0.95)
         optimum_halo = Circle(radius=0.2, color=C_OPTIMUM)
         optimum_halo.set_fill(C_OPTIMUM, opacity=0.16).set_stroke(
@@ -227,38 +230,20 @@ class MomentumRosenbrock(Slide):
 
     def _slider(self, tracker: VT, spec: SliderSpec) -> VGroup:
         theme = get_active_theme()
-        track = Line(LEFT * 1.05, RIGHT * 1.05)
-        track.set_stroke(C_MUTED, width=5, opacity=0.45)
-
-        label = MathTex(spec.label, color=spec.color, font_size=theme.typography.body)
-        label.next_to(track, LEFT, buff=0.28)
-
-        value = DN(tracker, num_decimal_places=spec.decimals, font_size=theme.typography.caption)
-        value.next_to(track, RIGHT, buff=0.25)
-        value.add_updater(lambda mob: mob.next_to(track, RIGHT, buff=0.25))
-
-        fill = always_redraw(
-            lambda: Line(
-                track.get_start(),
-                track.point_from_proportion(self._slider_alpha(tracker, spec)),
-            ).set_stroke(spec.color, width=7)
+        return ValueSlider(
+            tracker,
+            spec,
+            half_length=1.05,
+            label_font_size=theme.typography.body,
+            value_font_size=theme.typography.caption,
         )
-        knob = always_redraw(
-            lambda: Dot(
-                track.point_from_proportion(self._slider_alpha(tracker, spec)),
-                color=spec.color,
-                radius=0.095,
-            )
-        )
-
-        return VGroup(label, track, fill, knob, value)
 
     def _make_trajectory(self, axes: Axes, alpha: VT, beta: VT) -> VGroup:
         points = self._momentum_points(~alpha, ~beta)
         dots = VGroup(
             *(
                 Dot(
-                    self._axes_point(axes, point),
+                    _axes_point(axes, point),
                     color=C_PATH,
                     radius=STEP_DOT_RADIUS,
                 )
@@ -333,30 +318,7 @@ class MomentumRosenbrock(Slide):
         return np.asarray(points, dtype=np.float64)
 
     def _panel(self, mobject: VGroup) -> VGroup:
-        panel = VGroup(*(SurroundingRectangle(mob, buff=0.16) for mob in mobject))
-        panel.set_fill(C_PANEL, opacity=0.5).set_stroke(C_MUTED, width=0.8, opacity=0.28)
-        return panel
-
-    def _plot_frame(self, axes: Axes) -> Rectangle:
-        lower_left = axes.c2p(X_RANGE[0], Y_RANGE[0])
-        upper_right = axes.c2p(X_RANGE[1], Y_RANGE[1])
-        frame = Rectangle(
-            width=float(upper_right[0] - lower_left[0]),
-            height=float(upper_right[1] - lower_left[1]),
-        )
-        frame.set_stroke(C_FRAME, width=1.0, opacity=0.9)
-        frame.move_to((lower_left + upper_right) / 2)
-        return frame
-
-    def _contour_points(self, axes: Axes, segment: FloatArray) -> list[FloatArray]:
-        step = max(1, len(segment) // 130)
-        sampled = segment[::step]
-        if not np.array_equal(sampled[-1], segment[-1]):
-            sampled = np.vstack([sampled, segment[-1]])
-        return [self._axes_point(axes, point) for point in sampled]
-
-    def _axes_point(self, axes: Axes, point: FloatArray) -> FloatArray:
-        return np.asarray(axes.c2p(float(point[0]), float(point[1])), dtype=np.float64)
+        return segmented_panel(mobject)
 
     def _banana_value(self, points: FloatArray) -> FloatArray:
         x = points[0]
@@ -385,10 +347,6 @@ class MomentumRosenbrock(Slide):
         next_velocity = beta * velocity + self._banana_gradient(point)
         return point - alpha * next_velocity, next_velocity
 
-    def _slider_alpha(self, tracker: VT, spec: SliderSpec) -> float:
-        value = np.clip(~tracker, spec.minimum, spec.maximum)
-        return float((value - spec.minimum) / (spec.maximum - spec.minimum))
-
     def _attach_start_updater(self, dot: Dot, axes: Axes) -> None:
         dot.momentum_point = START.copy()
         dot.momentum_velocity = np.zeros(2, dtype=np.float64)
@@ -414,7 +372,7 @@ class MomentumRosenbrock(Slide):
         dot.momentum_point = START.copy()
         dot.momentum_velocity = np.zeros(2, dtype=np.float64)
         dot.momentum_visible = True
-        dot.move_to(self._axes_point(axes, START))
+        dot.move_to(_axes_point(axes, START))
         dot.set_opacity(1)
 
     def _update_step_dot(
@@ -438,7 +396,7 @@ class MomentumRosenbrock(Slide):
         dot.momentum_point = point
         dot.momentum_velocity = velocity
         dot.momentum_visible = self._inside_plot(point)
-        dot.move_to(self._axes_point(axes, point) if dot.momentum_visible else previous)
+        dot.move_to(_axes_point(axes, point) if dot.momentum_visible else previous)
         dot.set_opacity(1 if dot.momentum_visible else 0)
 
     def _update_connector(self, connector: Line, start: Dot, end: Dot) -> None:
@@ -455,19 +413,3 @@ class MomentumRosenbrock(Slide):
             X_RANGE[0] <= point[0] <= X_RANGE[1]
             and Y_RANGE[0] <= point[1] <= Y_RANGE[1]
         )
-
-    def _normalize_heat(self, values: FloatArray) -> FloatArray:
-        lower, upper = np.quantile(values, [0.03, 0.92])
-        normalized = np.clip((values - lower) / (upper - lower), 0, 1)
-        return normalized**0.72
-
-    def _blue_alpha_heatmap(self, values: FloatArray) -> npt.NDArray[np.uint8]:
-        intensity = (1.0 - values) ** 1.35
-        rgb = np.array(self._hex_to_rgb(HEATMAP_BLUE), dtype=np.float64)
-        alpha = 255.0 * HEATMAP_MAX_ALPHA * intensity
-        channels = [np.full_like(values, channel) for channel in rgb]
-        return np.dstack([*channels, alpha]).astype(np.uint8)
-
-    def _hex_to_rgb(self, color: str) -> tuple[int, int, int]:
-        raw = color.removeprefix("#")
-        return tuple(int(raw[index : index + 2], 16) for index in (0, 2, 4))

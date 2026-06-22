@@ -8,14 +8,15 @@ from manim import (
     DEGREES,
     DOWN,
     LEFT,
+    MED_SMALL_BUFF,
     RIGHT,
+    SMALL_BUFF,
     UP,
     Create,
     Dot3D,
     FadeIn,
     Group,
     MathTex,
-    SurroundingRectangle,
     ThreeDAxes,
     Title,
     VGroup,
@@ -28,25 +29,17 @@ config.write_to_movie = True
 
 from simplex import Caption, ColorBar, ScalarFieldSurface, ThreeDSlide
 
+from slides.style import (
+    C_BLUE,
+    C_GREEN,
+    C_ORANGE,
+    C_TEAL,
+    C_TEXT,
+    C_YELLOW,
+    glass_panel as _glass_panel,
+)
+
 FloatArray = npt.NDArray[np.float64]
-
-C_TEXT = "#F8FAFC"
-C_MUTED = "#94A3B8"
-C_FRAME = "#BFC9D2"
-C_PANEL = "#18212F"
-C_BLUE = "#3D8FC7"
-C_GREEN = "#34D399"
-C_ORANGE = "#FF6600"
-C_PURPLE = "#A78BFA"
-C_TEAL = "#2DD4BF"
-C_YELLOW = "#FFD700"
-
-
-def _glass_panel(mobject: VGroup) -> VGroup:
-    panel = SurroundingRectangle(mobject, buff=0.18, corner_radius=0.08)
-    panel.set_fill(C_PANEL, opacity=0.36)
-    panel.set_stroke(C_FRAME, width=0.8, opacity=0.22)
-    return VGroup(panel, mobject)
 
 
 def _surface_value(x: float, y: float) -> float:
@@ -184,7 +177,7 @@ class AdaGradLocalSqueeze(ThreeDSlide):
                 r"x_{t+1}=x_t-\eta\Lambda_t^{-1}g_t",
                 font_size=27,
             ),
-        ).arrange(DOWN, aligned_edge=RIGHT, buff=0.18)
+        ).arrange(DOWN, aligned_edge=RIGHT, buff=SMALL_BUFF)
         for mob in equation[1:]:
             mob.set_color_by_tex(r"\Lambda_t", C_ORANGE)
             mob.set_color_by_tex(r"\eta", C_YELLOW)
@@ -200,7 +193,7 @@ class AdaGradLocalSqueeze(ThreeDSlide):
             height=1.65,
             font_size=16,
         )
-        bar.next_to(equation, DOWN, buff=0.22)
+        bar.next_to(equation, DOWN, buff=MED_SMALL_BUFF)
         bar.align_to(equation, LEFT)
         hud = VGroup(equation, bar)
         hud_panel = _glass_panel(hud)
