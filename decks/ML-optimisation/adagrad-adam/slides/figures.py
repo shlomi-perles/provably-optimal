@@ -19,6 +19,7 @@ from manim import (
     ORIGIN,
     RIGHT,
     SMALL_BUFF,
+    StealthTip,
     UP,
     UL,
     UR,
@@ -49,6 +50,7 @@ from manim import (
 from simplex import Caption, DN, Slide, TexPage, VT, color_substrings, get_active_theme
 
 from slides.controls import SliderSpec, ValueSlider
+from slides.optimization_paths import OptimizationPath, OptimizationPathStyle
 from slides.plotting import (
     axes_limits as _axes_limits,
     axes_point as _axes_point,
@@ -78,7 +80,6 @@ from slides.style import (
     LAYER_MARKERS,
     LAYER_TRAJECTORY,
     PANEL_BUFF,
-    accent_rule as _accent_rule,
     color_text_parts as _color_text_parts,
     formula_stack as _formula_stack,
     label_for_dot,
@@ -165,6 +166,8 @@ MODE_CHART_BAR_PLACEHOLDER_RATIO = 1 / 100
 MODE_CHART_BAR_OPACITY = 0.88
 MODE_CHART_TAG_OFFSET = RIGHT * 0.60 + DOWN * 0.15
 MODE_CHART_READOUT_OFFSET = LEFT * 0.55 + DOWN * 0.18
+C_ETA = C_GREEN
+MODE_TRAJECTORY_STYLE = OptimizationPathStyle(color=C_ETA)
 MULTILINE_TITLE_BUFF = SMALL_BUFF / 5
 LEDGER_PROOF_COLUMN_BUFF = 0.7
 LEDGER_LABEL_DISTANCE = 0.17
@@ -297,6 +300,7 @@ def _coordinate_grid(axes: Axes, *, step: float = 1.0) -> VGroup:
             color=C_MUTED,
             stroke_width=GRID_AXIS_STROKE_WIDTH,
             max_tip_length_to_length_ratio=GRID_AXIS_TIP_RATIO,
+            tip_shape=StealthTip,
         )
         x_axis.set_opacity(GRID_AXIS_OPACITY)
         grid.add(x_axis)
@@ -308,6 +312,7 @@ def _coordinate_grid(axes: Axes, *, step: float = 1.0) -> VGroup:
             color=C_MUTED,
             stroke_width=GRID_AXIS_STROKE_WIDTH,
             max_tip_length_to_length_ratio=GRID_AXIS_TIP_RATIO,
+            tip_shape=StealthTip,
         )
         y_axis.set_opacity(GRID_AXIS_OPACITY)
         grid.add(y_axis)
@@ -419,8 +424,19 @@ def _axis_arrow(
         color=color,
         stroke_width=width,
         max_tip_length_to_length_ratio=AXIS_ARROW_TIP_RATIO,
+        tip_shape=StealthTip,
     )
     return arrow
+
+
+def _perpendicular_label_direction(arrow: Arrow) -> FloatArray:
+    direction = arrow.get_end() - arrow.get_start()
+    perpendicular = np.array([-direction[1], direction[0], 0.0], dtype=np.float64)
+    if np.linalg.norm(perpendicular) < ZERO_AXIS_EPSILON:
+        return UP
+    if np.dot(perpendicular, UP) < 0:
+        perpendicular = -perpendicular
+    return perpendicular
 
 
 def _eigenmode_annotation(
@@ -442,7 +458,11 @@ def _eigenmode_annotation(
     end = base_radius * relative_length * direction
     arrow = _axis_arrow(axes, np.zeros(2), end, color=color)
     label_mob = theme_math(label, color=color, typography="caption")
-    label_mob.next_to(arrow.get_end(), direction=arrow.get_end() - arrow.get_start(), buff=SMALL_BUFF)
+    label_mob.next_to(
+        arrow.get_end(),
+        direction=_perpendicular_label_direction(arrow),
+        buff=SMALL_BUFF,
+    )
     return VGroup(arrow, label_mob)
 
 
@@ -518,7 +538,16 @@ def _quadratic_panel(
     axes.set_z_index(LAYER_FRAME)
     markers = VGroup(origin, origin_label).set_z_index(LAYER_MARKERS)
     field = Group(heatmap, grid, levels)
-    return Group(frame, axes, field, markers, label, _accent_rule(frame, C_BLUE))
+    return Group(frame, axes, field, markers, label)
+
+
+def _scale_and_place_matching_frame_heights(regions: Sequence[object], panels: Sequence[Group]) -> None:
+    for region, panel in zip(regions, panels, strict=True):
+        region.scale_and_place(panel)
+    target_height = min(panel[0].height for panel in panels)
+    for region, panel in zip(regions, panels, strict=True):
+        panel.scale(target_height / panel[0].height)
+        region.place(panel)
 
 
 def _gd_path(matrix: FloatArray, x0: FloatArray, eta: float, steps: int) -> FloatArray:
@@ -594,30 +623,7 @@ def _mode_path(axes: Axes, eta: float, steps: int = MODE_TRAJECTORY_STEPS) -> VG
     coefficients = eigvecs.T @ MODE_INITIAL_POINT
     factors = 1.0 - eta * eigenvalues
     path = np.array([eigvecs @ (coefficients * factors**step) for step in range(steps + 1)])
-
-    connectors = VGroup()
-    dots = VGroup()
-    previous_screen: FloatArray | None = None
-    for index, point in enumerate(path[::2]):
-        if not np.all(np.isfinite(point)) or not _inside_axes(axes, point):
-            previous_screen = None
-            continue
-        screen_point = _axes_point(axes, point)
-        if previous_screen is not None:
-            connector = Line(previous_screen, screen_point)
-            connector.set_stroke(
-                C_GREEN,
-                width=MODE_TRAJECTORY_STROKE_WIDTH,
-                opacity=MODE_TRAJECTORY_OPACITY,
-            )
-            connectors.add(connector)
-        dot = Dot(screen_point, color=C_GREEN, radius=axes.height * MODE_DOT_FRAME_HEIGHT_RATIO)
-        if index == 0:
-            dot.scale(MODE_START_DOT_SCALE)
-        dots.add(dot)
-        previous_screen = screen_point
-
-    trajectory = VGroup(connectors, dots)
+    trajectory = OptimizationPath(axes, path, style=MODE_TRAJECTORY_STYLE)
 
     arrows = VGroup()
     for step in range(0, steps + 1, MODE_ARROW_INTERVAL):
@@ -707,6 +713,7 @@ def _eta_slider(tracker: VT, spec: SliderSpec, eigenvalues: FloatArray) -> VGrou
         label_font_size=theme.typography.caption,
         value_font_size=theme.typography.caption,
         tick_values=(1.0 / beta, 2.0 / (alpha + beta), 2.0 / beta),
+        show_endpoint_labels=True,
     )
 
 
@@ -723,7 +730,7 @@ def _mode_magnitude_chart(
     show_x_label: bool,
 ) -> VGroup:
     y_max = MODE_CHART_Y_STEP * np.ceil(
-        max(MODE_CHART_MIN_Y_MAX, coefficient**2 * MODE_CHART_HEADROOM) / MODE_CHART_Y_STEP
+        max(MODE_CHART_MIN_Y_MAX, abs(coefficient) * MODE_CHART_HEADROOM) / MODE_CHART_Y_STEP
     )
     frame = Rectangle(width=width, height=height)
     frame.set_stroke(
@@ -750,23 +757,28 @@ def _mode_magnitude_chart(
     epsilon_label = theme_math(r"\epsilon", color=C_MUTED, typography="caption")
     epsilon_label.next_to(epsilon_line, RIGHT, buff=SMALL_BUFF)
 
-    steps = np.arange(0, RESPONSE_STEP_COUNT + 1, MODE_CHART_STEP_STRIDE)
+    iterations = np.arange(MODE_CHART_STEP_STRIDE, RESPONSE_STEP_COUNT + 1, MODE_CHART_STEP_STRIDE)
     bars = VGroup()
-    for index, step in enumerate(steps):
+    for index, iteration in enumerate(iterations):
         bar = Rectangle(
             width=frame.width * MODE_CHART_BAR_PLACEHOLDER_RATIO,
             height=frame.height * MODE_CHART_BAR_PLACEHOLDER_RATIO,
         )
 
-        def update_bar(mob: Rectangle, *, step: int = int(step), index: int = index) -> None:
-            response = abs(1.0 - ~eta * lambda_i) ** (2 * (step + 1))
-            value = float(coefficient**2 * response)
-            bar_width = frame.width / len(steps) * MODE_CHART_BAR_WIDTH_FRACTION
+        def update_bar(
+            mob: Rectangle,
+            *,
+            iteration: int = int(iteration),
+            index: int = index,
+        ) -> None:
+            response = (1.0 - ~eta * lambda_i) ** iteration
+            value = float(coefficient * response)
+            bar_width = frame.width / len(iterations) * MODE_CHART_BAR_WIDTH_FRACTION
             bar_height = max(
                 frame.height * min(value / y_max, 1.0),
                 frame.height * MODE_CHART_BAR_MIN_HEIGHT_RATIO,
             )
-            x = frame.get_left()[0] + frame.width * (index + 0.5) / len(steps)
+            x = frame.get_left()[0] + frame.width * (index + 0.5) / len(iterations)
             y = frame.get_bottom()[1] + bar_height / 2
             replacement = Rectangle(width=bar_width, height=bar_height)
             replacement.set_fill(color, opacity=MODE_CHART_BAR_OPACITY)
@@ -778,11 +790,12 @@ def _mode_magnitude_chart(
         bars.add(bar)
 
     y_label = theme_math(
-        rf"\|(1-\eta\lambda_{mode_index})^{{t+1}}\alpha_{mode_index}v_{mode_index}\|_2^2",
-        color=color,
+        rf"(1-\eta\lambda_{mode_index})^{{t+1}}\alpha_{mode_index}v_{mode_index}",
+        color=C_TEXT,
         typography="caption",
     )
     y_label.rotate(PI / 2)
+    y_label.scale_to_fit_height(frame.height)
     y_label.next_to(frame, LEFT, buff=SMALL_BUFF)
     tag = theme_math(mode_tag, color=color, typography="caption")
     tag.move_to(frame.get_corner(UL) + MODE_CHART_TAG_OFFSET)
@@ -791,14 +804,14 @@ def _mode_magnitude_chart(
         DN(lambda: 1.0 - ~eta * lambda_i, num_decimal_places=3),
     ).arrange(RIGHT, buff=SMALL_BUFF)
     r_readout.move_to(frame.get_corner(UR) + MODE_CHART_READOUT_OFFSET)
-    x_label = Caption(r"even iteration $t$") if show_x_label else VGroup()
+    x_label = Caption(r"even iteration $t+1$") if show_x_label else VGroup()
     if show_x_label:
         x_label.next_to(frame, DOWN)
     return VGroup(frame, baseline, epsilon_line, epsilon_label, bars, y_label, tag, r_readout, x_label)
 
 
 def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -> VGroup:
-    title = Caption("squared mode magnitudes")
+    title = Caption("mode magnitudes")
     matrix, _ = _rotated_quadratic_matrix()
     eigenvalues, eigvecs = _quadratic_eigendecomposition(matrix)
     coefficients = eigvecs.T @ MODE_INITIAL_POINT
@@ -1545,14 +1558,13 @@ class QuadraticRotation(Slide):
                 color=C_ORANGE,
             ),
         )
-        left.scale_and_place(original)
-        right.scale_and_place(eigenbasis)
+        _scale_and_place_matching_frame_heights((left, right), (original, eigenbasis))
 
         map_label = VGroup(
             theme_math(r"x\mapsto", color=C_YELLOW, typography="caption"),
             theme_math(r"V^\top(x-x^\star)", color=C_YELLOW, typography="caption"),
         ).arrange(DOWN, buff=SMALL_BUFF)
-        map_arrow = CurvedArrow(LEFT, RIGHT, color=C_YELLOW)
+        map_arrow = CurvedArrow(LEFT, RIGHT, angle=-PI / 2, color=C_YELLOW, tip_shape=StealthTip)
         map_group = VGroup(map_label, map_arrow).arrange(DOWN)
         mid.scale_and_place(map_group, buff=SMALL_BUFF)
 
@@ -1606,21 +1618,22 @@ class GradientDescentModes(Slide):
         marker_radius = frame.height * PANEL_MARKER_FRAME_HEIGHT_RATIO
         origin = Dot(axes.c2p(0, 0), color=C_TEXT, radius=marker_radius).set_z_index(LAYER_MARKERS)
         origin_label = label_for_dot(r"x^\star", origin, direction=DR)
-        start = Dot(axes.c2p(6, 8), color=C_GREEN, radius=marker_radius).set_z_index(
+        start = Dot(axes.c2p(6, 8), color=C_YELLOW, radius=marker_radius).set_z_index(
             LAYER_MARKERS
         )
-        start_label = label_for_dot(r"x_0", start, color=C_GREEN, direction=UR)
+        start_label = label_for_dot(r"x_0", start, color=C_YELLOW, direction=UR)
         markers = VGroup(origin, origin_label, start, start_label)
         plot_shell = Group(heatmap, contours, axes, frame, markers)
         top_left.scale_and_place(plot_shell, buff=SMALL_BUFF)
 
         slider = _eta_slider(
             eta,
-            SliderSpec(r"\eta", 0.0, 2.0 / beta, 3, C_ORANGE),
+            SliderSpec(r"\eta", 0.0, 2.0 / beta, 3, C_ETA),
             eigenvalues,
         )
         slider.scale(0.84)
-        slider.move_to(frame.get_corner(UL) + RIGHT * 1.55 + DOWN * 0.32)
+        slider.move_to(frame.get_corner(DL), aligned_edge=DL)
+        slider.shift(RIGHT * SMALL_BUFF + UP * SMALL_BUFF)
         trajectory = always_redraw(lambda: _mode_path(axes, ~eta).set_z_index(LAYER_TRAJECTORY))
 
         responses = _mode_response_stack(eta)
@@ -1659,7 +1672,7 @@ class GradientDescentModes(Slide):
         _color_text_parts(
             equations,
             {
-                r"\eta": C_ORANGE,
+                r"\eta": C_ETA,
                 r"\lambda_i": C_ORANGE,
                 r"\alpha_i": C_GREEN,
                 r"\alpha": C_BLUE,
@@ -1756,9 +1769,10 @@ class AdaGradKnownRuler(Slide):
                 ).arrange(RIGHT, buff=SMALL_BUFF),
             ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
             method_key.move_to(axes.c2p(-2.10, 8.35), aligned_edge=UL)
-            panel.add(paths, VGroup(start, start_label, method_key))
+            start_group = VGroup(start, start_label, method_key)
+            panel.add(paths, start_group)
             region.scale_and_place(panel, buff=SMALL_BUFF)
-            panels.append(panel)
+            panels.append((panel, paths, start_group))
 
         legend = VGroup(
             VGroup(Dot(color=C_GREEN), Caption(r"scalar GD")).arrange(RIGHT),
@@ -1769,11 +1783,11 @@ class AdaGradKnownRuler(Slide):
         _color_text_parts(legend, {r"D_t": C_TEAL})
         legend_region.scale_and_place(_themed_box(legend), buff=SMALL_BUFF)
 
-        self.play(Write(title), *(FadeIn(panel[:6], panel[7]) for panel in panels))
+        self.play(Write(title), *(FadeIn(panel[:5], start_group) for panel, _, start_group in panels))
         self.fragment(title="Compare rulers")
-        self.play(*(Write(panel[6][0]) for panel in panels), FadeIn(legend[0]))
-        self.play(*(Write(panel[6][1]) for panel in panels), FadeIn(legend[1]))
-        self.play(*(Write(panel[6][2]) for panel in panels), FadeIn(legend[2:]))
+        self.play(*(Write(paths[0]) for _, paths, _ in panels), FadeIn(legend[0]))
+        self.play(*(Write(paths[1]) for _, paths, _ in panels), FadeIn(legend[1]))
+        self.play(*(Write(paths[2]) for _, paths, _ in panels), FadeIn(legend[2:]))
 
 
 class AdaGradDiagonalScaling(Slide):
@@ -1801,7 +1815,7 @@ class AdaGradDiagonalScaling(Slide):
             arrow = VGroup(
                 theme_math(r"x\mapsto", color=C_PURPLE, typography="caption"),
                 theme_math(r"D_A^{-1/2}x", color=C_PURPLE, typography="caption"),
-                Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0),
+                Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0, tip_shape=StealthTip),
             ).arrange(DOWN, buff=SMALL_BUFF)
             arrow_region.scale_and_place(arrow, buff=SMALL_BUFF)
             row_groups.append((before, arrow, after))
@@ -1929,7 +1943,7 @@ class AdaGradWeightedLedger(Slide):
         map_arrow = VGroup(
             theme_math(r"x\mapsto", color=C_PURPLE, typography="caption"),
             theme_math(r"D_t^{-1/2}x", color=C_PURPLE, typography="caption"),
-            Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0),
+            Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0, tip_shape=StealthTip),
         ).arrange(DOWN, buff=SMALL_BUFF)
         arrow_region.scale_and_place(map_arrow, buff=SMALL_BUFF)
 
@@ -2169,4 +2183,4 @@ class AdaGradWeightedLedger(Slide):
         )
         field = Group(heatmap, grid, levels)
         distances = VGroup(old_distance, new_distance, step, dots, point_labels, side_labels, extras)
-        return Group(frame, axes, field, distances, caption, _accent_rule(frame, C_TEAL))
+        return Group(frame, axes, field, distances, caption)
