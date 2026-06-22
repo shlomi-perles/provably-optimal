@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from manim import RoundedRectangle
+from manim import RoundedRectangle, SurroundingRectangle, Transform, Unwrite
 
 from slides.helpers.figure_helpers import *
 from slides.helpers.style import (
+    C_PANEL_SOFT,
     PANEL_CORNER_RADIUS,
     PANEL_FILL_OPACITY,
     PANEL_STROKE_OPACITY,
@@ -34,9 +35,8 @@ class SecondOrderApproximation(Slide):
             )
 
         def grad(x: float) -> float:
-            return (
-                4 * LOCAL_QUARTIC_WEIGHT * (x - center) ** 3
-                + 2 * LOCAL_QUADRATIC_WEIGHT * (x - LOCAL_QUADRATIC_CENTER)
+            return 4 * LOCAL_QUARTIC_WEIGHT * (x - center) ** 3 + 2 * LOCAL_QUADRATIC_WEIGHT * (
+                x - LOCAL_QUADRATIC_CENTER
             )
 
         def hess(x: float) -> float:
@@ -46,7 +46,11 @@ class SecondOrderApproximation(Slide):
             return float(f(np.array([x]))[0])
 
         def model_values(values: FloatArray, anchor: float, curvature: float) -> FloatArray:
-            return f_scalar(anchor) + grad(anchor) * (values - anchor) + 0.5 * curvature * (values - anchor) ** 2
+            return (
+                f_scalar(anchor)
+                + grad(anchor) * (values - anchor)
+                + 0.5 * curvature * (values - anchor) ** 2
+            )
 
         f_t = float(f(np.array([x_t]))[0])
         g_t = grad(x_t)
@@ -69,13 +73,15 @@ class SecondOrderApproximation(Slide):
         f_star = float(f(np.array([x_star]))[0])
         x_min, x_max, x_step = LOCAL_X_RANGE
         base_x_span = x_max - x_min
-        anchor_sweep_x = float(x_star + 2 * abs(x_star - x_t))
+        alpha_sweep_x = float(x_star + 2 * abs(x_star - x_t))
+        beta_sweep_x = float(x_star + abs(x_star - x_t))
+        view_sweep_x = max(alpha_sweep_x, beta_sweep_x)
         zoom_anchor_x = float(x_star)
         zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
         zoom_padding = x_step / 2
         zoom_out_scale = max(
             1.0,
-            (anchor_sweep_x + zoom_padding - zoom_anchor_x)
+            (view_sweep_x + zoom_padding - zoom_anchor_x)
             / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
             (zoom_anchor_x - min(x_min, x_t) + zoom_padding)
             / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
@@ -84,11 +90,11 @@ class SecondOrderApproximation(Slide):
         zoom_x_min = zoom_anchor_x - zoom_anchor_x_ratio * zoom_x_span
         zoom_x_max = zoom_x_min + zoom_x_span
         curvature_domain = np.linspace(
-            min(x_min, zoom_x_min, x_t, anchor_sweep_x),
-            max(x_max, zoom_x_max, x_t, anchor_sweep_x),
+            min(x_min, zoom_x_min, x_t, alpha_sweep_x, beta_sweep_x),
+            max(x_max, zoom_x_max, x_t, alpha_sweep_x, beta_sweep_x),
             LOCAL_CURVE_SAMPLES,
         )
-        sweep_endpoints = (x_t, anchor_sweep_x)
+        sweep_endpoints = (x_t, alpha_sweep_x, beta_sweep_x)
         curvature_anchor_count = max(
             len(sweep_endpoints),
             LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT,
@@ -104,11 +110,7 @@ class SecondOrderApproximation(Slide):
             mask = np.abs(deltas) > ZERO_AXIS_EPSILON
             required_curvatures = (
                 2
-                * (
-                    f(curvature_domain[mask])
-                    - f_scalar(anchor)
-                    - grad(anchor) * deltas[mask]
-                )
+                * (f(curvature_domain[mask]) - f_scalar(anchor) - grad(anchor) * deltas[mask])
                 / deltas[mask] ** 2
             )
             return (
@@ -420,15 +422,30 @@ class SecondOrderApproximation(Slide):
             direction: FloatArray,
             color: str,
             colors: dict[str, str] | None = None,
+            buff: float | None = None,
         ) -> MathTex:
             mob = theme_math(label, color=color, typography="caption").set_z_index(LAYER_MARKERS)
             if colors is not None:
                 color_substrings(mob, colors)
-            mob.next_to(dot, direction)
+            if buff is None:
+                mob.next_to(dot, direction)
+            else:
+                mob.next_to(dot, direction, buff=buff)
             return mob
 
-        def track_label_next_to_dot(mob: MathTex, dot: Dot, direction: FloatArray) -> None:
-            mob.add_updater(lambda label_mob: label_mob.next_to(dot, direction))
+        def track_label_next_to_dot(
+            mob: MathTex,
+            dot: Dot,
+            direction: FloatArray,
+            buff: float | None = None,
+        ) -> None:
+            def update_label(label_mob: MathTex) -> None:
+                if buff is None:
+                    label_mob.next_to(dot, direction)
+                else:
+                    label_mob.next_to(dot, direction, buff=buff)
+
+            mob.add_updater(update_label)
 
         def update_vertical_guide(
             mob: VGroup,
@@ -475,7 +492,9 @@ class SecondOrderApproximation(Slide):
             )
 
         x_t_dot = tracked_dot(lambda: x_t, lambda: f_t, color=C_YELLOW, radius=local_marker_radius)
-        newton_dot = tracked_dot(lambda: x_next, lambda: y_next, color=C_GREEN, radius=local_marker_radius)
+        newton_dot = tracked_dot(
+            lambda: x_next, lambda: y_next, color=C_GREEN, radius=local_marker_radius
+        )
         star_dot = tracked_dot(
             lambda: float(x_star),
             lambda: f_star,
@@ -487,9 +506,10 @@ class SecondOrderApproximation(Slide):
         x_t_value = label_next_to_dot(
             r"f(x_t)",
             x_t_dot,
-            direction=UR,
+            direction=DL,
             color=C_TEXT,
             colors={r"x_t": C_YELLOW},
+            buff=SMALL_BUFF,
         )
         star_label = label_next_to_dot(
             r"f(x^\star)",
@@ -539,6 +559,7 @@ class SecondOrderApproximation(Slide):
 
         def track_delta_bracket(mob: VGroup) -> None:
             mob.add_updater(update_delta_bracket)
+
         delta_label = theme_math(
             r"\delta=-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
             color=WHITE,
@@ -646,12 +667,18 @@ class SecondOrderApproximation(Slide):
                     r"x_{t+1}": C_GREEN,
                     r"\alpha": C_BLUE,
                     r"\beta": C_ORANGE,
+                    r"\delta": C_GREEN,
+                    r"\lambda_{\min}": C_BLUE,
+                    r"\lambda_{\max}": C_ORANGE,
+                    r"\kappa": C_PURPLE,
                     r"\nabla^2": C_GREEN,
                 },
             )
             return mob
 
-        def plot_legend_entry(tex: str, *, color: str, width: float, dashed: bool = False) -> VGroup:
+        def plot_legend_entry(
+            tex: str, *, color: str, width: float, dashed: bool = False
+        ) -> VGroup:
             label = color_formula(theme_math(tex, color=C_TEXT, typography="caption"))
             sample_width = frame.width * LOCAL_LEGEND_SAMPLE_FRAME_WIDTH_RATIO
             sample = (
@@ -722,7 +749,8 @@ class SecondOrderApproximation(Slide):
             width=plot_legend.width + 2 * legend_box_buff,
             height=legend_background_heights[0],
         )
-        plot_legend_background.set_fill(C_PANEL_DEEP, opacity=PANEL_FILL_OPACITY)
+        panel_background_color = C_PANEL_SOFT
+        plot_legend_background.set_fill(panel_background_color, opacity=PANEL_FILL_OPACITY)
         plot_legend_background.set_stroke(
             C_FRAME,
             width=PANEL_STROKE_WIDTH,
@@ -738,6 +766,18 @@ class SecondOrderApproximation(Slide):
                 legend_background_heights[entry_count - 1]
             ).move_to(legend_background_top, aligned_edge=UP)
 
+        hessian_region, definition_region = _split_rows(right, [1, 2])
+        hessian_equation = color_formula(
+            theme_math(
+                r"f(x_t+\delta)\approx f(x_t)"
+                r"+\nabla f(x_t)^\top\delta"
+                r"+\frac{1}{2}\delta^\top\nabla^2 f(x_t)\delta",
+            )
+        ).set_z_index(LAYER_MARKERS)
+        right.scale_and_place(hessian_equation, buff=SMALL_BUFF)
+        hessian_equation_top = hessian_equation.copy()
+        hessian_region.scale_and_place(hessian_equation_top, buff=SMALL_BUFF)
+
         definition_template = TexTemplate()
         definition_template.add_to_preamble(r"\usepackage{amsthm}")
         definition_template.add_to_preamble(
@@ -751,7 +791,7 @@ class SecondOrderApproximation(Slide):
             r"+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2"
             r"\]"
             r"\end{definition}",
-            page_width=right.width,
+            page_width=definition_region,
             buff=SMALL_BUFF,
             tex_template=definition_template,
             font_size=definition_font_size,
@@ -763,10 +803,31 @@ class SecondOrderApproximation(Slide):
             r"+\frac{\beta}{2}\left\|x-x_t\right\|_2^2"
             r"\]"
             r"\end{definition}",
-            page_width=right.width,
+            page_width=definition_region,
             buff=SMALL_BUFF,
             tex_template=definition_template,
             font_size=definition_font_size,
+        )
+        alpha_eigen_note = color_formula(
+            theme_math(
+                r"\lambda_{\min}(\nabla^2 f(x))=\alpha",
+                color=C_TEXT,
+                typography="caption",
+            )
+        )
+        beta_eigen_note = color_formula(
+            theme_math(
+                r"\lambda_{\max}(\nabla^2 f(x))=\beta",
+                color=C_TEXT,
+                typography="caption",
+            )
+        )
+        kappa_note = color_formula(
+            theme_math(
+                r"\kappa=\frac{\beta}{\alpha}",
+                color=C_TEXT,
+                typography="caption",
+            )
         )
         color_substrings(
             alpha_definition,
@@ -778,20 +839,146 @@ class SecondOrderApproximation(Slide):
             {r"x_t": C_YELLOW, r"\beta": C_ORANGE},
             probe_class=MathTex,
         )
-        definition_stack = VGroup(alpha_definition, beta_definition).arrange(
+        alpha_definition_group = VGroup(alpha_definition, alpha_eigen_note).arrange(
+            DOWN,
+            aligned_edge=LEFT,
+            buff=SMALL_BUFF,
+        )
+        beta_definition_group = VGroup(beta_definition, beta_eigen_note, kappa_note).arrange(
+            DOWN,
+            aligned_edge=LEFT,
+            buff=SMALL_BUFF,
+        )
+        definition_stack = VGroup(alpha_definition_group, beta_definition_group).arrange(
             DOWN,
             aligned_edge=LEFT,
             buff=MED_LARGE_BUFF,
         )
-        right_panel = _themed_box(definition_stack)
-        right.scale_and_place(right_panel, buff=SMALL_BUFF)
-        sidebar_background = right_panel[0]
+        definition_box_buff = SMALL_BUFF
+        definition_region.scale_and_place(
+            definition_stack,
+            buff=PANEL_BUFF + MED_SMALL_BUFF,
+        )
+        definition_background_heights = (
+            alpha_definition_group.height + 2 * definition_box_buff,
+            definition_stack.height + 2 * definition_box_buff,
+        )
+        definition_background_top = definition_stack.get_top() + UP * definition_box_buff
+        definition_background = RoundedRectangle(
+            corner_radius=PANEL_CORNER_RADIUS,
+            width=definition_stack.width + 2 * definition_box_buff,
+            height=definition_background_heights[0],
+        )
+        definition_background.set_fill(panel_background_color, opacity=PANEL_FILL_OPACITY)
+        definition_background.set_stroke(
+            C_FRAME,
+            width=PANEL_STROKE_WIDTH,
+            opacity=PANEL_STROKE_OPACITY,
+        )
+        definition_background.move_to(definition_background_top, aligned_edge=UP)
+        definition_background.set_z_index(LAYER_MARKERS)
+        definition_stack.set_z_index(LAYER_MARKERS + 1)
+
+        def grow_definition_background():
+            return definition_background.animate.stretch_to_fit_height(
+                definition_background_heights[-1]
+            ).move_to(definition_background_top, aligned_edge=UP)
+
+        proof_horizontal_margin = MED_SMALL_BUFF
+        proof_separator_width = right.width - 2 * proof_horizontal_margin
+        proof_separator = Line(
+            LEFT * proof_separator_width / 2,
+            RIGHT * proof_separator_width / 2,
+        )
+        proof_separator.set_stroke(
+            C_FRAME,
+            width=LOCAL_PANEL_STROKE_WIDTH,
+            opacity=LOCAL_PANEL_STROKE_OPACITY,
+        )
+        proof_separator.next_to(hessian_equation_top, DOWN, buff=SMALL_BUFF)
+        proof_separator.set_z_index(LAYER_MARKERS)
+
+        derivative_equation = color_formula(
+            theme_math(
+                r"\nabla_\delta m(\delta)="
+                r"\nabla f(x_t)+\nabla^2 f(x_t)\delta",
+            )
+        )
+        newton_delta_equation = color_formula(
+            theme_math(
+                r"\delta=-\frac{1}{\nabla^2 f(x_t)}\nabla f(x_t)",
+            )
+        )
+        delta_relation = color_formula(theme_math(r"\delta=x_{t+1}-x_t"))
+        implication = theme_math(r"\Longrightarrow", color=C_TEXT)
+        newton_update = color_formula(
+            theme_math(
+                r"x_{t+1}=x_t-\frac{1}{\nabla^2 f(x_t)}\nabla f(x_t)",
+            )
+        )
+        newton_step_equation = VGroup(delta_relation, implication, newton_update).arrange(
+            RIGHT,
+            buff=SMALL_BUFF,
+        )
+        derivation_stack = VGroup(
+            derivative_equation,
+            newton_delta_equation,
+            newton_step_equation,
+        ).arrange(DOWN, aligned_edge=LEFT, buff=MED_LARGE_BUFF)
+        derivation_width = proof_separator_width
+        derivation_height = proof_separator.get_bottom()[1] - right.bottom - 2 * SMALL_BUFF
+        derivation_scale = min(
+            derivation_width / derivation_stack.width,
+            derivation_height / derivation_stack.height,
+            1.0,
+        )
+        derivation_stack.scale(derivation_scale)
+        derivation_stack.next_to(proof_separator, DOWN, buff=SMALL_BUFF)
+        derivation_stack.set_z_index(LAYER_MARKERS + 1)
+
+        newton_frame = SurroundingRectangle(
+            newton_update,
+            color=C_YELLOW,
+            buff=SMALL_BUFF,
+            corner_radius=PANEL_CORNER_RADIUS,
+        )
+        newton_frame.set_stroke(C_YELLOW, width=PANEL_STROKE_WIDTH)
+        newton_frame.set_z_index(LAYER_MARKERS)
+        highlighted_newton = VGroup(newton_update, newton_frame)
+        highlighted_newton_top = highlighted_newton.copy()
+        highlighted_newton_top.next_to(proof_separator, DOWN, buff=SMALL_BUFF)
+        highlighted_newton_top.set_x(proof_separator.get_center()[0])
+
+        convergence_text = VGroup(
+            Caption(r"Under a few assumptions,"),
+            Caption(r"Newton's method converges after:"),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
+        convergence_formula = theme_math(
+            r"O\left(\log\log\frac{1}{\epsilon}\right)",
+            color=C_TEXT,
+        )
+        color_substrings(convergence_formula, {r"\epsilon": C_YELLOW})
+        convergence_note = VGroup(convergence_text, convergence_formula).arrange(
+            DOWN,
+            buff=SMALL_BUFF,
+        )
+        if convergence_note.width > derivation_width:
+            convergence_note.scale(derivation_width / convergence_note.width)
+        proof_center = np.array(
+            [
+                proof_separator.get_center()[0],
+                (proof_separator.get_bottom()[1] + right.bottom) / 2,
+                0,
+            ],
+            dtype=np.float64,
+        )
+        convergence_note.move_to(proof_center)
+        convergence_note.set_z_index(LAYER_MARKERS + 1)
 
         self.play(
             Write(title),
             Write(frame),
             Write(bottom_axis),
-            Write(sidebar_background),
             Write(plot_legend_background),
             Write(true_curve),
             Write(x_t_dot),
@@ -813,23 +1000,26 @@ class SecondOrderApproximation(Slide):
             Write(delta_label),
             grow_legend_background(2),
             Write(hessian_legend),
+            Write(hessian_equation),
         )
         self.next_slide()
 
         self.play(
+            Transform(hessian_equation, hessian_equation_top),
             Write(lower_model),
             Write(alpha_marker),
-            Write(alpha_definition),
+            Write(definition_background),
+            Write(alpha_definition_group),
             grow_legend_background(3),
             Write(alpha_legend),
         )
         self.next_slide()
 
-        self.play(Write(upper_model), Write(beta_marker))
-        self.next_slide()
-
         self.play(
-            Write(beta_definition),
+            Write(upper_model),
+            Write(beta_marker),
+            Write(beta_definition_group),
+            grow_definition_background(),
             grow_legend_background(4),
             Write(beta_legend),
         )
@@ -861,7 +1051,7 @@ class SecondOrderApproximation(Slide):
         track_dot(star_dot, lambda: float(x_star), lambda: f_star)
         track_bottom_tick(x_t_tick, lambda: x_t, color=C_YELLOW)
         track_bottom_tick(next_tick, lambda: x_next, color=C_GREEN)
-        track_label_next_to_dot(x_t_value, x_t_dot, UR)
+        track_label_next_to_dot(x_t_value, x_t_dot, DL, SMALL_BUFF)
         track_label_next_to_dot(star_label, star_dot, DR)
         track_vertical_guide(
             x_line,
@@ -903,22 +1093,6 @@ class SecondOrderApproximation(Slide):
         self.next_slide()
 
         track_curve(
-            upper_model,
-            upper_model_values,
-            color=C_ORANGE,
-            width=LOCAL_BOUND_STROKE_WIDTH,
-            opacity=LOCAL_BOUND_OPACITY,
-        )
-        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
-        self.play(beta_anchor @ anchor_sweep_x)
-        self.next_slide()
-
-        self.play(beta_anchor @ x_t)
-        for mob in (upper_model, beta_marker):
-            mob.clear_updaters()
-        self.next_slide()
-
-        track_curve(
             lower_model,
             lower_model_values,
             color=C_BLUE,
@@ -926,10 +1100,51 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOUND_OPACITY,
         )
         track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
-        self.play(alpha_anchor @ anchor_sweep_x)
+        self.play(alpha_anchor @ alpha_sweep_x, run_time=2)
         self.next_slide()
 
-        self.play(alpha_anchor @ x_t)
         for mob in (lower_model, alpha_marker):
             mob.clear_updaters()
+        track_curve(
+            upper_model,
+            upper_model_values,
+            color=C_ORANGE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+            opacity=LOCAL_BOUND_OPACITY,
+        )
+        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
+        self.play(beta_anchor @ beta_sweep_x, run_time=2)
+        self.next_slide()
+
+        for mob in (upper_model, beta_marker):
+            mob.clear_updaters()
+
+        self.play(
+            Unwrite(definition_background),
+            Unwrite(alpha_definition_group),
+            Unwrite(beta_definition_group),
+            Transform(hessian_equation, hessian_equation_top),
+            Create(proof_separator),
+        )
+        self.next_slide()
+
+        self.play(Write(derivative_equation))
+        self.next_slide()
+
+        self.play(Write(newton_delta_equation))
+        self.next_slide()
+
+        self.play(Write(newton_step_equation), Create(newton_frame))
+        self.next_slide()
+
+        self.play(
+            Unwrite(derivative_equation),
+            Unwrite(newton_delta_equation),
+            Unwrite(VGroup(delta_relation, implication)),
+            Transform(highlighted_newton, highlighted_newton_top),
+        )
+        self.play(Write(convergence_note))
+        self.next_slide()
+
+        self.clear_scene()
         self.next_slide()
