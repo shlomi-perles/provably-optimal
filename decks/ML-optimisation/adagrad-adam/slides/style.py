@@ -6,12 +6,24 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from manim import (
+    BLACK,
+    BLUE,
+    DARK_GRAY,
     DR,
     DOWN,
+    GRAY,
+    GREEN,
     LEFT,
+    LIGHT_GRAY,
+    ORANGE,
+    PURPLE,
+    RED,
     RIGHT,
     SMALL_BUFF,
+    TEAL,
     UP,
+    WHITE,
+    YELLOW,
     Line,
     MathTex,
     Mobject,
@@ -27,23 +39,23 @@ from simplex.engine.scaling import scale_to_fit_mobject
 
 @dataclass(frozen=True, slots=True)
 class Palette:
-    text: str = "#F8FAFC"
-    muted: str = "#94A3B8"
-    grid: str = "#3A4553"
-    frame: str = "#BFC9D2"
-    panel: str = "#18212F"
-    panel_soft: str = "#101827"
-    panel_deep: str = "#0B1220"
-    contour: str = "#91BBD0"
-    blue: str = "#3D8FC7"
-    orange: str = "#FF6600"
-    green: str = "#34D399"
-    purple: str = "#A78BFA"
-    red: str = "#F87171"
-    teal: str = "#2DD4BF"
-    yellow: str = "#FFD700"
-    optimum: str = "#DDEAF2"
-    optimum_stroke: str = "#F6FBFF"
+    text: str = str(WHITE)
+    muted: str = str(GRAY)
+    grid: str = str(DARK_GRAY)
+    frame: str = str(LIGHT_GRAY)
+    panel: str = str(BLACK)
+    panel_soft: str = str(DARK_GRAY)
+    panel_deep: str = str(BLACK)
+    contour: str = str(BLUE)
+    blue: str = str(BLUE)
+    orange: str = str(ORANGE)
+    green: str = str(GREEN)
+    purple: str = str(PURPLE)
+    red: str = str(RED)
+    teal: str = str(TEAL)
+    yellow: str = str(YELLOW)
+    optimum: str = str(WHITE)
+    optimum_stroke: str = str(WHITE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,10 +228,11 @@ def label_for_dot(
     color: str = C_TEXT,
     direction: Sequence[float] = DR,
     scale: float = LABEL_TEX_DOT_SCALE,
+    buff: float = SMALL_BUFF,
 ) -> MathTex:
     label = MathTex(tex, color=color)
     scale_to_fit_mobject(label, dot, scaleback=scale)
-    label.next_to(dot, direction)
+    label.next_to(dot, direction, buff=buff)
     return label
 
 

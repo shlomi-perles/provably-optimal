@@ -22,11 +22,13 @@ from manim import (
     UP,
     UL,
     UR,
+    WHITE,
     Arrow,
     Axes,
     BraceBetweenPoints,
     Circle,
     Create,
+    CurvedArrow,
     DashedLine,
     DashedVMobject,
     Dot,
@@ -179,9 +181,6 @@ LEDGER_FRAME_STROKE_OPACITY = 0.54
 LOCAL_CURVE_SAMPLES = 220
 LOCAL_ALPHA_INITIAL = 0.70
 LOCAL_BETA_INITIAL = 3.00
-LOCAL_ALPHA_SWEEP_VALUES = (0.42, 0.95, LOCAL_ALPHA_INITIAL)
-LOCAL_BETA_SWEEP_VALUES = (4.20, 2.35, LOCAL_BETA_INITIAL)
-LOCAL_SWEEP_RUN_TIMES = (2.0, 2.0, 1.4)
 LOCAL_MODEL_CENTER = 0.35
 LOCAL_CURRENT_X = -1.15
 LOCAL_QUADRATIC_CENTER = 0.15
@@ -232,6 +231,24 @@ def _rotation(theta_deg: float) -> FloatArray:
     return np.array([[c, -s], [s, c]], dtype=np.float64)
 
 
+def _quadratic_eigendecomposition(matrix: FloatArray) -> tuple[FloatArray, FloatArray]:
+    eigenvalues, eigenvectors = np.linalg.eigh(matrix)
+    order = np.argsort(eigenvalues)
+    eigenvalues = eigenvalues[order].astype(np.float64, copy=False)
+    eigenvectors = eigenvectors[:, order].astype(np.float64, copy=True)
+    for index in range(eigenvectors.shape[1]):
+        vector = eigenvectors[:, index]
+        anchor = int(np.argmax(np.abs(vector)))
+        if vector[anchor] < 0:
+            eigenvectors[:, index] = -vector
+    return eigenvalues, eigenvectors
+
+
+def _quadratic_axis_matrix(matrix: FloatArray) -> FloatArray:
+    eigenvalues, _ = _quadratic_eigendecomposition(matrix)
+    return np.diag(eigenvalues)
+
+
 def _theta_deg() -> float:
     base = _rotation(BASE_THETA_DEG) @ BASE_INITIAL_VECTOR
     offset = np.rad2deg(np.arctan2(base[0] - base[1], base[0] + base[1]))
@@ -242,8 +259,9 @@ THETA_DEG = _theta_deg()
 
 
 def _rotated_quadratic_matrix() -> tuple[FloatArray, FloatArray]:
-    eigvecs = _rotation(THETA_DEG)
-    matrix = eigvecs @ np.diag([MU, LAMBDA_MAX]) @ eigvecs.T
+    basis = _rotation(THETA_DEG)
+    matrix = basis @ np.diag([MU, LAMBDA_MAX]) @ basis.T
+    _, eigvecs = _quadratic_eigendecomposition(matrix)
     return matrix, eigvecs
 
 
@@ -313,16 +331,6 @@ def _data_label(
     typography: str = "caption",
 ) -> MathTex:
     return theme_math(label, color=color, typography=typography).move_to(axes.c2p(x, y))
-
-
-def _x_marker(axes: Axes, x: float, y: float, *, color: str, size: float) -> VGroup:
-    center = axes.c2p(x, y)
-    marker = VGroup(
-        Line(center + (LEFT + DOWN) * size / 2, center + (RIGHT + UP) * size / 2),
-        Line(center + (LEFT + UP) * size / 2, center + (RIGHT + DOWN) * size / 2),
-    )
-    marker.set_stroke(color, width=X_MARKER_STROKE_WIDTH, opacity=X_MARKER_OPACITY)
-    return marker
 
 
 def _quadratic_values(matrix: FloatArray, x_grid: FloatArray, y_grid: FloatArray) -> FloatArray:
@@ -410,6 +418,29 @@ def _axis_arrow(
     return arrow
 
 
+def _eigenmode_annotation(
+    axes: Axes,
+    vector: FloatArray,
+    eigenvalue: float,
+    eigenvalues: FloatArray,
+    label: str,
+    *,
+    color: str,
+) -> VGroup:
+    x_min, x_max, y_min, y_max = _axes_limits(axes)
+    base_radius = 0.5 * min(x_max - x_min, y_max - y_min) * (1 - 2 * GRID_AXIS_INSET_RATIO)
+    relative_length = min(
+        1.0,
+        float(np.mean(eigenvalues)) / max(float(eigenvalue), ZERO_AXIS_EPSILON),
+    )
+    direction = vector / np.linalg.norm(vector)
+    end = base_radius * relative_length * direction
+    arrow = _axis_arrow(axes, np.zeros(2), end, color=color)
+    label_mob = theme_math(label, color=color, typography="caption")
+    label_mob.next_to(arrow.get_end(), direction=arrow.get_end() - arrow.get_start(), buff=SMALL_BUFF)
+    return VGroup(arrow, label_mob)
+
+
 def _quadratic_level_sets(axes: Axes, matrix: FloatArray, count: int = 10) -> VGroup:
     x_min, x_max, y_min, y_max = _axes_limits(axes)
     x_values = np.linspace(x_min, x_max, CONTOUR_GRID_SAMPLES)
@@ -448,6 +479,7 @@ def _quadratic_panel(
     y_range: tuple[float, float, float] = (-3.7, 3.7, 1.0),
     x_length: float = 4.2,
     y_length: float = 3.5,
+    title_inside: bool = False,
 ) -> Group:
     axes = _make_axes(
         x_range,
@@ -459,18 +491,22 @@ def _quadratic_panel(
     heatmap = _quadratic_heatmap(axes, matrix, width=QUADRATIC_PANEL_HEATMAP_WIDTH).set_z_index(
         LAYER_HEATMAP
     )
+    frame = _plot_frame(axes)
     grid = _coordinate_grid(axes).set_z_index(LAYER_CONTOUR)
     levels = _quadratic_level_sets(axes, matrix)
     levels.set_z_index(LAYER_CONTOUR)
     label = Caption(title)
-    frame = _plot_frame(axes)
+    if title_inside:
+        label.next_to(frame.get_corner(UL), direction=DR, buff=SMALL_BUFF)
+    else:
+        label.next_to(axes, UP)
+    label.set_z_index(LAYER_MARKERS)
     origin = Dot(
         axes.c2p(0, 0),
         color=C_TEXT,
         radius=frame.height * PANEL_MARKER_FRAME_HEIGHT_RATIO,
     )
     origin_label = label_for_dot(r"x^\star", origin, direction=DR)
-    label.next_to(axes, UP)
     frame.set_stroke(C_FRAME, width=1.0, opacity=0.72)
     frame.set_z_index(LAYER_FRAME)
     axes.set_opacity(0)
@@ -548,8 +584,8 @@ def _path_with_dots(
 
 
 def _mode_path(axes: Axes, eta: float, steps: int = MODE_TRAJECTORY_STEPS) -> VGroup:
-    _, eigvecs = _rotated_quadratic_matrix()
-    eigenvalues = np.array([MU, LAMBDA_MAX], dtype=np.float64)
+    matrix, _ = _rotated_quadratic_matrix()
+    eigenvalues, eigvecs = _quadratic_eigendecomposition(matrix)
     coefficients = eigvecs.T @ MODE_INITIAL_POINT
     factors = 1.0 - eta * eigenvalues
     path = np.array([eigvecs @ (coefficients * factors**step) for step in range(steps + 1)])
@@ -656,15 +692,16 @@ def _adagrad_coordinate_response(eta: float) -> FloatArray:
     return np.asarray(history, dtype=np.float64)
 
 
-def _eta_slider(tracker: VT, spec: SliderSpec) -> VGroup:
+def _eta_slider(tracker: VT, spec: SliderSpec, eigenvalues: FloatArray) -> VGroup:
     theme = get_active_theme()
+    alpha, beta = float(eigenvalues[0]), float(eigenvalues[-1])
     return ValueSlider(
         tracker,
         spec,
         half_length=ETA_SLIDER_HALF_LENGTH,
         label_font_size=theme.typography.caption,
         value_font_size=theme.typography.caption,
-        tick_values=(1.0 / LAMBDA_MAX, 2.0 / (MU + LAMBDA_MAX), 2.0 / LAMBDA_MAX),
+        tick_values=(1.0 / beta, 2.0 / (alpha + beta), 2.0 / beta),
     )
 
 
@@ -757,11 +794,12 @@ def _mode_magnitude_chart(
 
 def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -> VGroup:
     title = Caption("squared mode magnitudes")
-    _, eigvecs = _rotated_quadratic_matrix()
+    matrix, _ = _rotated_quadratic_matrix()
+    eigenvalues, eigvecs = _quadratic_eigendecomposition(matrix)
     coefficients = eigvecs.T @ MODE_INITIAL_POINT
     flat = _mode_magnitude_chart(
         eta,
-        MU,
+        float(eigenvalues[0]),
         coefficient=float(coefficients[0]),
         color=C_BLUE,
         mode_index=1,
@@ -772,7 +810,7 @@ def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -
     )
     steep = _mode_magnitude_chart(
         eta,
-        LAMBDA_MAX,
+        float(eigenvalues[-1]),
         coefficient=float(coefficients[1]),
         color=C_ORANGE,
         mode_index=2,
@@ -848,7 +886,10 @@ class SecondOrderApproximation(Slide):
         left, right = _split_weighted(self.region, [1.72, 1.0])
 
         alpha = VT(LOCAL_ALPHA_INITIAL)
-        beta = VT(LOCAL_BETA_INITIAL)
+        beta = VT(LOCAL_ALPHA_INITIAL)
+        alpha_anchor = VT(LOCAL_CURRENT_X)
+        beta_anchor = VT(LOCAL_CURRENT_X)
+        view_scale = VT(1.0)
         center = LOCAL_MODEL_CENTER
         x_t = LOCAL_CURRENT_X
 
@@ -868,10 +909,17 @@ class SecondOrderApproximation(Slide):
         def hess(x: float) -> float:
             return 12 * LOCAL_QUARTIC_WEIGHT * (x - center) ** 2 + 2 * LOCAL_QUADRATIC_WEIGHT
 
+        def f_scalar(x: float) -> float:
+            return float(f(np.array([x]))[0])
+
+        def model_values(values: FloatArray, anchor: float, curvature: float) -> FloatArray:
+            return f_scalar(anchor) + grad(anchor) * (values - anchor) + 0.5 * curvature * (values - anchor) ** 2
+
         f_t = float(f(np.array([x_t]))[0])
         g_t = grad(x_t)
         h_t = hess(x_t)
         x_next = x_t - g_t / h_t
+        y_next = float(model_values(np.array([x_next]), x_t, h_t)[0])
         roots = np.roots(
             [
                 4 * LOCAL_QUARTIC_WEIGHT,
@@ -908,134 +956,249 @@ class SecondOrderApproximation(Slide):
             y_length=LOCAL_AXIS_Y_LENGTH,
         )
         axes.set_opacity(0)
-        bottom_axis = Line(axes.c2p(x_min, y_min), axes.c2p(x_max, y_min))
-        bottom_axis.set_stroke(
-            C_MUTED,
-            width=LOCAL_BOTTOM_AXIS_STROKE_WIDTH,
-            opacity=LOCAL_BOTTOM_AXIS_OPACITY,
-        )
-        true_curve = _smooth_curve(axes, xs, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
-        local_model = DashedVMobject(
-            _smooth_curve(
-                axes,
-                xs,
-                lambda values: f_t + g_t * (values - x_t) + 0.5 * h_t * (values - x_t) ** 2,
-                color=C_PURPLE,
-                width=LOCAL_MODEL_STROKE_WIDTH,
-            ),
-            num_dashes=LOCAL_MODEL_DASH_COUNT,
-        )
-        lower_model = always_redraw(
-            lambda: _smooth_curve(
-                axes,
-                xs,
-                lambda values: f_t + g_t * (values - x_t) + 0.5 * ~alpha * (values - x_t) ** 2,
-                color=C_BLUE,
-                width=LOCAL_BOUND_STROKE_WIDTH,
-                opacity=LOCAL_BOUND_OPACITY,
-            )
-        )
-        upper_model = always_redraw(
-            lambda: _smooth_curve(
-                axes,
-                xs,
-                lambda values: f_t + g_t * (values - x_t) + 0.5 * ~beta * (values - x_t) ** 2,
-                color=C_ORANGE,
-                width=LOCAL_BOUND_STROKE_WIDTH,
-                opacity=LOCAL_BOUND_OPACITY,
-            )
-        )
         frame = _plot_frame(axes)
-        local_marker_radius = frame.height * SECOND_ORDER_MARKER_FRAME_HEIGHT_RATIO
-        x_t_dot = Dot(axes.c2p(x_t, f_t), color=C_TEXT, radius=local_marker_radius)
-        newton_dot = Dot(
-            axes.c2p(x_next, f_t + g_t * (x_next - x_t) + 0.5 * h_t * (x_next - x_t) ** 2),
-            color=C_PURPLE,
-            radius=local_marker_radius,
-        )
-        star_dot = Dot(
-            axes.c2p(float(x_star), f_star),
-            color=C_TEXT,
-            radius=local_marker_radius * SECOND_ORDER_STAR_DOT_SCALE,
-        )
-        x_t_tick = _bottom_tick(axes, x_t, r"x_t")
-        next_tick = _bottom_tick(axes, x_next, r"x_{t+1}")
-        x_t_value = _data_label(
-            axes,
-            x_t + LOCAL_F_LABEL_OFFSET[0],
-            f_t + LOCAL_F_LABEL_OFFSET[1],
-            r"f(x_t)",
-        )
-        star_label = _data_label(
-            axes,
-            float(x_star) + LOCAL_STAR_LABEL_OFFSET[0],
-            f_star + LOCAL_STAR_LABEL_OFFSET[1],
-            r"f(x^\star)",
-        )
-        x_line = DashedLine(axes.c2p(x_t, y_min), axes.c2p(x_t, y_max), color=C_MUTED)
-        x_line.set_stroke(
-            width=LOCAL_VERTICAL_GUIDE_STROKE_WIDTH,
-            opacity=LOCAL_CURRENT_GUIDE_OPACITY,
-        )
-        next_line = DashedLine(axes.c2p(x_next, y_min), axes.c2p(x_next, y_max), color=C_PURPLE)
-        next_line.set_stroke(
-            width=LOCAL_VERTICAL_GUIDE_STROKE_WIDTH,
-            opacity=LOCAL_NEXT_GUIDE_OPACITY,
-        )
-        bracket_y = y_min + LOCAL_BRACKET_Y_RATIO * (y_max - y_min)
-        tick_height = LOCAL_BRACKET_TICK_HEIGHT_RATIO * (y_max - y_min)
-        delta_bracket = VGroup(
-            Line(axes.c2p(x_t, bracket_y), axes.c2p(x_next, bracket_y)),
-            Line(
-                axes.c2p(x_t, bracket_y - LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
-                axes.c2p(x_t, bracket_y + LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
-            ),
-            Line(
-                axes.c2p(x_next, bracket_y - LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
-                axes.c2p(x_next, bracket_y + LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
-            ),
-        )
-        delta_bracket.set_stroke(C_PURPLE, width=LOCAL_BRACKET_STROKE_WIDTH)
-        delta_label = theme_math(
-            r"\delta=-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
-            color=C_PURPLE,
-            typography="caption",
-        )
-        delta_label.move_to(
-            axes.c2p(
-                0.5 * (x_t + x_next),
-                bracket_y + LOCAL_BRACKET_LABEL_Y_RATIO * (y_max - y_min),
-            )
-        )
-
-        def alpha_minimum() -> tuple[float, float]:
-            value = max(~alpha, 1e-3)
-            x_alpha = x_t - g_t / value
-            y_alpha = f_t + g_t * (x_alpha - x_t) + 0.5 * value * (x_alpha - x_t) ** 2
-            return float(x_alpha), float(y_alpha)
-
-        def beta_minimum() -> tuple[float, float]:
-            value = max(~beta, 1e-3)
-            x_beta = x_t - g_t / value
-            y_beta = f_t + g_t * (x_beta - x_t) + 0.5 * value * (x_beta - x_t) ** 2
-            return float(x_beta), float(y_beta)
-
-        x_marker_size = frame.height * X_MARKER_FRAME_HEIGHT_RATIO
-        alpha_marker = always_redraw(
-            lambda: _x_marker(axes, *alpha_minimum(), color=C_BLUE, size=x_marker_size)
-        )
-        beta_marker = always_redraw(
-            lambda: _x_marker(axes, *beta_minimum(), color=C_ORANGE, size=x_marker_size)
-        )
         frame.set_fill(C_PANEL_DEEP, opacity=LOCAL_PANEL_FILL_OPACITY)
         frame.set_stroke(
             C_FRAME,
             width=LOCAL_PANEL_STROKE_WIDTH,
             opacity=LOCAL_PANEL_STROKE_OPACITY,
         )
-        plot_title = Caption("local quadratic interface")
-        plot_title.next_to(frame, UP)
-        accent = _accent_rule(frame, C_PURPLE)
+        bottom_axis = Line(frame.get_corner(DL), frame.get_corner(DR))
+        bottom_axis.set_stroke(
+            C_MUTED,
+            width=LOCAL_BOTTOM_AXIS_STROKE_WIDTH,
+            opacity=LOCAL_BOTTOM_AXIS_OPACITY,
+        )
+
+        base_x_center = 0.5 * (x_min + x_max)
+        base_y_center = 0.5 * (y_min + y_max)
+        base_x_span = x_max - x_min
+        base_y_span = y_max - y_min
+
+        def view_limits() -> tuple[float, float, float, float]:
+            scale = max(float(~view_scale), ZERO_AXIS_EPSILON)
+            half_x = 0.5 * base_x_span * scale
+            half_y = 0.5 * base_y_span * scale
+            return (
+                base_x_center - half_x,
+                base_x_center + half_x,
+                base_y_center - half_y,
+                base_y_center + half_y,
+            )
+
+        def data_point(x: float, y: float) -> FloatArray:
+            view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
+            x_ratio = (x - view_x_min) / (view_x_max - view_x_min)
+            y_ratio = (y - view_y_min) / (view_y_max - view_y_min)
+            return frame.get_corner(DL) + RIGHT * (frame.width * x_ratio) + UP * (frame.height * y_ratio)
+
+        def curve_for(
+            fn: Callable[[FloatArray], FloatArray],
+            *,
+            color: str,
+            width: float,
+            opacity: float = 1.0,
+        ) -> VMobject:
+            view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
+            visible_xs = np.linspace(view_x_min, view_x_max, LOCAL_CURVE_SAMPLES)
+            ys = fn(visible_xs)
+            mask = np.isfinite(ys) & (ys >= view_y_min) & (ys <= view_y_max)
+            points = [
+                data_point(float(x), float(y))
+                for x, y in zip(visible_xs[mask], ys[mask], strict=True)
+            ]
+            if len(points) < 2:
+                clipped_y = float(np.clip(ys[0], view_y_min, view_y_max))
+                points = [data_point(float(visible_xs[0]), clipped_y)]
+                points.append(points[0] + RIGHT * POLYLINE_FALLBACK_STEP)
+            curve = VMobject()
+            curve.set_points_smoothly(points)
+            curve.set_stroke(color, width=width, opacity=opacity)
+            return curve
+
+        true_curve = always_redraw(lambda: curve_for(f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH))
+        local_model = always_redraw(
+            lambda: DashedVMobject(
+                curve_for(
+                    lambda values: model_values(values, x_t, h_t),
+                    color=C_GREEN,
+                    width=LOCAL_MODEL_STROKE_WIDTH,
+                ),
+                num_dashes=LOCAL_MODEL_DASH_COUNT,
+            )
+        )
+        lower_model = always_redraw(
+            lambda: curve_for(
+                lambda values: model_values(values, float(~alpha_anchor), float(~alpha)),
+                color=C_BLUE,
+                width=LOCAL_BOUND_STROKE_WIDTH,
+                opacity=LOCAL_BOUND_OPACITY,
+            )
+        )
+        upper_model = always_redraw(
+            lambda: curve_for(
+                lambda values: model_values(values, float(~beta_anchor), float(~beta)),
+                color=C_ORANGE,
+                width=LOCAL_BOUND_STROKE_WIDTH,
+                opacity=LOCAL_BOUND_OPACITY,
+            )
+        )
+        local_marker_radius = frame.height * SECOND_ORDER_MARKER_FRAME_HEIGHT_RATIO
+
+        def tracked_dot(x_fn: Callable[[], float], y_fn: Callable[[], float], *, color: str, radius: float) -> Dot:
+            dot = Dot(data_point(x_fn(), y_fn()), color=color, radius=radius)
+            dot.add_updater(lambda mob: mob.move_to(data_point(x_fn(), y_fn())))
+            return dot
+
+        def bottom_tick(x_fn: Callable[[], float], label: str, *, color: str) -> VGroup:
+            view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
+            _ = (view_x_min, view_x_max)
+            tick_height = BOTTOM_TICK_HEIGHT_RATIO * (view_y_max - view_y_min)
+            tick = Line(data_point(x_fn(), view_y_min), data_point(x_fn(), view_y_min + tick_height))
+            tick.set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
+            tex = MathTex(label, color=color)
+            tex.scale_to_fit_height(TICK_LABEL_TEX_SCALE * tick.height)
+            tex.next_to(tick, DOWN, buff=SMALL_BUFF)
+            group = VGroup(tick, tex)
+
+            def update_tick(mob: VGroup) -> None:
+                _, _, current_y_min, current_y_max = view_limits()
+                current_tick_height = BOTTOM_TICK_HEIGHT_RATIO * (current_y_max - current_y_min)
+                mob[0].put_start_and_end_on(
+                    data_point(x_fn(), current_y_min),
+                    data_point(x_fn(), current_y_min + current_tick_height),
+                )
+                mob[0].set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
+                mob[1].next_to(mob[0], DOWN, buff=SMALL_BUFF)
+
+            group.add_updater(update_tick)
+            return group
+
+        def data_label(
+            x_fn: Callable[[], float],
+            y_fn: Callable[[], float],
+            label: str,
+            *,
+            color: str,
+        ) -> MathTex:
+            mob = theme_math(label, color=color, typography="caption")
+            mob.move_to(data_point(x_fn(), y_fn()))
+            mob.add_updater(lambda label_mob: label_mob.move_to(data_point(x_fn(), y_fn())))
+            return mob
+
+        def vertical_guide(x_fn: Callable[[], float], *, color: str, opacity: float) -> DashedLine:
+            def make_line() -> DashedLine:
+                _, _, current_y_min, current_y_max = view_limits()
+                line = DashedLine(data_point(x_fn(), current_y_min), data_point(x_fn(), current_y_max), color=color)
+                line.set_stroke(width=LOCAL_VERTICAL_GUIDE_STROKE_WIDTH, opacity=opacity)
+                return line
+
+            return always_redraw(make_line)
+
+        x_t_dot = tracked_dot(lambda: x_t, lambda: f_t, color=C_YELLOW, radius=local_marker_radius)
+        newton_dot = tracked_dot(lambda: x_next, lambda: y_next, color=C_GREEN, radius=local_marker_radius)
+        star_dot = tracked_dot(
+            lambda: float(x_star),
+            lambda: f_star,
+            color=C_TEXT,
+            radius=local_marker_radius * SECOND_ORDER_STAR_DOT_SCALE,
+        )
+        x_t_tick = bottom_tick(lambda: x_t, r"x_t", color=C_YELLOW)
+        next_tick = bottom_tick(lambda: x_next, r"x_{t+1}", color=C_GREEN)
+        x_t_value = data_label(
+            lambda: x_t + LOCAL_F_LABEL_OFFSET[0],
+            lambda: f_t + LOCAL_F_LABEL_OFFSET[1],
+            r"f(x_t)",
+            color=C_YELLOW,
+        )
+        star_label = data_label(
+            lambda: float(x_star) + LOCAL_STAR_LABEL_OFFSET[0],
+            lambda: f_star + LOCAL_STAR_LABEL_OFFSET[1],
+            r"f(x^\star)",
+            color=C_TEXT,
+        )
+        x_line = vertical_guide(lambda: x_t, color=C_YELLOW, opacity=LOCAL_CURRENT_GUIDE_OPACITY)
+        next_line = vertical_guide(lambda: x_next, color=C_GREEN, opacity=LOCAL_NEXT_GUIDE_OPACITY)
+
+        def bracket_geometry() -> tuple[float, float]:
+            _, _, current_y_min, current_y_max = view_limits()
+            y_span = current_y_max - current_y_min
+            return (
+                current_y_min + LOCAL_BRACKET_Y_RATIO * y_span,
+                LOCAL_BRACKET_TICK_HEIGHT_RATIO * y_span,
+            )
+
+        delta_bracket = VGroup(Line(), Line(), Line())
+
+        def update_delta_bracket(mob: VGroup) -> None:
+            bracket_y, tick_height = bracket_geometry()
+            segments = (
+                (data_point(x_t, bracket_y), data_point(x_next, bracket_y)),
+                (
+                    data_point(x_t, bracket_y - LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
+                    data_point(x_t, bracket_y + LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
+                ),
+                (
+                    data_point(x_next, bracket_y - LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
+                    data_point(x_next, bracket_y + LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
+                ),
+            )
+            for line, (start, end) in zip(mob, segments, strict=True):
+                line.put_start_and_end_on(start, end)
+            mob.set_stroke(WHITE, width=LOCAL_BRACKET_STROKE_WIDTH)
+
+        delta_bracket.add_updater(update_delta_bracket)
+        update_delta_bracket(delta_bracket)
+        delta_label = theme_math(
+            r"\delta=-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
+            color=WHITE,
+            typography="caption",
+        )
+
+        def update_delta_label(mob: MathTex) -> None:
+            bracket_y, _ = bracket_geometry()
+            _, _, current_y_min, current_y_max = view_limits()
+            mob.scale_to_fit_width(delta_bracket[0].width)
+            mob.move_to(
+                data_point(
+                    0.5 * (x_t + x_next),
+                    bracket_y + LOCAL_BRACKET_LABEL_Y_RATIO * (current_y_max - current_y_min),
+                )
+            )
+
+        delta_label.add_updater(update_delta_label)
+        update_delta_label(delta_label)
+
+        def alpha_minimum() -> tuple[float, float]:
+            value = max(~alpha, 1e-3)
+            anchor = float(~alpha_anchor)
+            x_alpha = anchor - grad(anchor) / value
+            y_alpha = float(model_values(np.array([x_alpha]), anchor, value)[0])
+            return float(x_alpha), float(y_alpha)
+
+        def beta_minimum() -> tuple[float, float]:
+            value = max(~beta, 1e-3)
+            anchor = float(~beta_anchor)
+            x_beta = anchor - grad(anchor) / value
+            y_beta = float(model_values(np.array([x_beta]), anchor, value)[0])
+            return float(x_beta), float(y_beta)
+
+        def x_marker(x: float, y: float, *, color: str) -> VGroup:
+            center_point = data_point(x, y)
+            size = frame.height * X_MARKER_FRAME_HEIGHT_RATIO
+            marker = VGroup(
+                Line(center_point + (LEFT + DOWN) * size / 2, center_point + (RIGHT + UP) * size / 2),
+                Line(center_point + (LEFT + UP) * size / 2, center_point + (RIGHT + DOWN) * size / 2),
+            )
+            marker.set_stroke(color, width=X_MARKER_STROKE_WIDTH, opacity=X_MARKER_OPACITY)
+            return marker
+
+        alpha_marker = always_redraw(
+            lambda: x_marker(*alpha_minimum(), color=C_BLUE)
+        )
+        beta_marker = always_redraw(
+            lambda: x_marker(*beta_minimum(), color=C_ORANGE)
+        )
         plot = VGroup(
             frame,
             bottom_axis,
@@ -1057,82 +1220,139 @@ class SecondOrderApproximation(Slide):
             delta_label,
             alpha_marker,
             beta_marker,
-            plot_title,
-            accent,
         )
         left.scale_and_place(plot, buff=SMALL_BUFF)
 
-        taylor = theme_math(
-            r"f(x_t+\delta)",
-            r"\approx",
-            r"f(x_t)+\nabla f(x_t)^\top\delta",
-            r"+\frac12\delta^\top\nabla^2 f(x_t)\delta",
-            typography="caption",
-        )
-        solve = theme_math(
-            r"\nabla f(x_t)+\nabla^2f(x_t)\delta=0",
-            typography="caption",
-        )
-        update = theme_math(
-            r"x_{t+1}=x_t-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
-            typography="caption",
-        )
-        envelope = theme_math(
-            r"\alpha I\preceq \nabla^2 f(x)\preceq \beta I",
-            typography="caption",
-        )
-        for mob in (taylor, solve, update, envelope):
-            color_substrings(
+        def color_formula(mob: VMobject) -> VMobject:
+            _color_text_parts(
                 mob,
                 {
-                    r"\delta": C_PURPLE,
                     r"x_t": C_YELLOW,
-                    r"x_{t+1}": C_PURPLE,
+                    r"x_{t+1}": C_GREEN,
                     r"\alpha": C_BLUE,
                     r"\beta": C_ORANGE,
+                    r"\nabla^2": C_GREEN,
                 },
             )
-        readouts = VGroup(
-            VGroup(theme_math(r"\alpha=", color=C_BLUE, typography="caption"), DN(alpha, num_decimal_places=2)).arrange(RIGHT),
-            VGroup(theme_math(r"\beta=", color=C_ORANGE, typography="caption"), DN(beta, num_decimal_places=2)).arrange(RIGHT),
-        ).arrange(RIGHT, buff=MED_SMALL_BUFF)
-        sidebar = _formula_stack(
-            Caption("local model"),
-            taylor,
-            Caption("minimize the model"),
-            solve,
-            update,
-            Caption("curvature envelope"),
-            envelope,
-            readouts,
+            return mob
+
+        def legend_entry(tex: str, *, color: str, width: float, dashed: bool = False) -> VGroup:
+            label = color_formula(theme_math(tex, color=C_TEXT, typography="caption"))
+            sample_width = TICK_LABEL_TEX_SCALE * label.height
+            sample = DashedLine(ORIGIN, RIGHT * sample_width, color=color) if dashed else Line(ORIGIN, RIGHT * sample_width)
+            sample.set_stroke(color, width=width)
+            return VGroup(sample, label).arrange(RIGHT, buff=SMALL_BUFF)
+
+        f_legend = legend_entry(r"f(x)", color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
+        hessian_legend = legend_entry(
+            r"\begin{aligned}"
+            r"f(x_t)&+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
+            r"&+\frac{1}{2}(x-x_t)^\top\nabla^2 f(x_t)(x-x_t)"
+            r"\end{aligned}",
+            color=C_GREEN,
+            width=LOCAL_MODEL_STROKE_WIDTH,
+            dashed=True,
         )
-        right.scale_and_place(_themed_box(sidebar))
+        alpha_definition = color_formula(
+            theme_math(
+                r"\begin{aligned}"
+                r"f(x)&\ge f(x_t)+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
+                r"&+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2"
+                r"\end{aligned}",
+                color=C_TEXT,
+                typography="caption",
+            )
+        )
+        alpha_legend = legend_entry(
+            r"\begin{aligned}"
+            r"f(x_t)&+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
+            r"&+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2"
+            r"\end{aligned}",
+            color=C_BLUE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+        )
+        beta_definition = color_formula(
+            theme_math(
+                r"\begin{aligned}"
+                r"f(x)&\le f(x_t)+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
+                r"&+\frac{\beta}{2}\left\|x-x_t\right\|_2^2"
+                r"\end{aligned}",
+                color=C_TEXT,
+                typography="caption",
+            )
+        )
+        beta_legend = legend_entry(
+            r"\begin{aligned}"
+            r"f(x_t)&+\left\langle\nabla f(x_t),x-x_t\right\rangle\\"
+            r"&+\frac{\beta}{2}\left\|x-x_t\right\|_2^2"
+            r"\end{aligned}",
+            color=C_ORANGE,
+            width=LOCAL_BOUND_STROKE_WIDTH,
+        )
+        sidebar = _formula_stack(
+            f_legend,
+            hessian_legend,
+            alpha_definition,
+            alpha_legend,
+            beta_definition,
+            beta_legend,
+        )
+        right_panel = _themed_box(sidebar)
+        right.scale_and_place(right_panel, buff=SMALL_BUFF)
+        sidebar_background = right_panel[0]
+
+        zoom_out_scale = 1.0 + abs(float(x_star) - x_t) / base_x_span
 
         self.play(
             Write(title),
             FadeIn(frame),
-            Write(accent),
             Write(bottom_axis),
-            Write(true_curve),
-            FadeIn(x_t_dot, x_t_tick, x_t_value, plot_title),
+            FadeIn(sidebar_background),
+            Create(true_curve),
+            FadeIn(x_t_dot, x_t_tick, x_t_value),
+            Write(f_legend),
         )
-        self.play(Write(taylor))
-        self.fragment(title="Newton model")
+        self.next_slide()
+
+        self.add(
+            local_model,
+            newton_dot,
+            next_tick,
+            star_dot,
+            star_label,
+            x_line,
+            next_line,
+            delta_bracket,
+            delta_label,
+        )
+        self.play(Write(hessian_legend))
+        self.next_slide()
+
+        self.add(lower_model, alpha_marker)
         self.play(
-            Write(local_model),
-            FadeIn(newton_dot, next_tick, star_dot, star_label, x_line, next_line, delta_bracket, delta_label),
-            Write(solve),
-            Write(update),
+            Write(alpha_definition),
+            Write(alpha_legend),
         )
-        self.fragment(title="Curvature envelope")
-        self.play(Write(lower_model), Write(upper_model), FadeIn(alpha_marker, beta_marker), Write(envelope), FadeIn(readouts))
-        for alpha_value, beta_value, run_time in zip(
-            LOCAL_ALPHA_SWEEP_VALUES,
-            LOCAL_BETA_SWEEP_VALUES,
-            LOCAL_SWEEP_RUN_TIMES,
-            strict=True,
-        ):
-            self.play(alpha @ alpha_value, beta @ beta_value, run_time=run_time)
+        self.next_slide()
+
+        self.add(upper_model, beta_marker)
+        self.next_slide()
+
+        self.play(beta @ LOCAL_BETA_INITIAL)
+        self.play(Write(beta_definition), Write(beta_legend))
+        self.next_slide()
+
+        self.play(view_scale @ zoom_out_scale, beta_anchor @ float(x_star))
+        self.next_slide()
+
+        self.play(beta_anchor @ x_t)
+        self.next_slide()
+
+        self.play(alpha_anchor @ float(x_star))
+        self.next_slide()
+
+        self.play(alpha_anchor @ x_t, view_scale @ 1.0)
+        self.next_slide()
 
 
 class QuadraticRotation(Slide):
@@ -1141,44 +1361,72 @@ class QuadraticRotation(Slide):
     def construct(self) -> None:
         title = _start_slide(self, "The quadratic microscope")
         matrix, eigvecs = _rotated_quadratic_matrix()
-        diagonal = np.diag([MU, LAMBDA_MAX])
+        eigenvalues, eigvecs = _quadratic_eigendecomposition(matrix)
+        diagonal = np.diag(eigenvalues)
         body, strip = _split_rows(self.region, [4.3, 1.0])
         left, mid, right = _split_weighted(body, [1.0, 0.42, 1.0])
 
-        original = _quadratic_panel(matrix, "original coordinates", x_length=4.4, y_length=4.4)
-        flat_vec = eigvecs[:, 0]
-        steep_vec = eigvecs[:, 1]
+        original = _quadratic_panel(
+            matrix,
+            "original coordinates",
+            x_length=4.4,
+            y_length=4.4,
+            title_inside=True,
+        )
         original_axes = original[1]
         original.add(
-            _axis_arrow(original_axes, np.zeros(2), 3.25 * flat_vec, color=C_BLUE),
-            _axis_arrow(original_axes, np.zeros(2), 1.75 * steep_vec, color=C_ORANGE),
-            theme_math(r"v_{\min}", color=C_BLUE, typography="caption").move_to(
-                original_axes.c2p(*(3.55 * flat_vec))
+            _eigenmode_annotation(
+                original_axes,
+                eigvecs[:, 0],
+                float(eigenvalues[0]),
+                eigenvalues,
+                r"v_{\min}",
+                color=C_BLUE,
             ),
-            theme_math(r"v_{\max}", color=C_ORANGE, typography="caption").move_to(
-                original_axes.c2p(*(2.05 * steep_vec))
+            _eigenmode_annotation(
+                original_axes,
+                eigvecs[:, 1],
+                float(eigenvalues[-1]),
+                eigenvalues,
+                r"v_{\max}",
+                color=C_ORANGE,
             ),
         )
-        eigenbasis = _quadratic_panel(diagonal, "eigenbasis coordinates", x_length=4.4, y_length=4.4)
+        eigenbasis = _quadratic_panel(
+            diagonal,
+            "eigenbasis coordinates",
+            x_length=4.4,
+            y_length=4.4,
+            title_inside=True,
+        )
+        diagonal_values, diagonal_basis = _quadratic_eigendecomposition(diagonal)
         eigen_axes = eigenbasis[1]
         eigenbasis.add(
-            _axis_arrow(eigen_axes, np.zeros(2), np.array([3.25, 0.0]), color=C_BLUE),
-            _axis_arrow(eigen_axes, np.zeros(2), np.array([0.0, 1.75]), color=C_ORANGE),
-            theme_math(r"v_{\min}", color=C_BLUE, typography="caption").move_to(
-                eigen_axes.c2p(3.55, 0.22)
+            _eigenmode_annotation(
+                eigen_axes,
+                diagonal_basis[:, 0],
+                float(diagonal_values[0]),
+                diagonal_values,
+                r"v_{\min}",
+                color=C_BLUE,
             ),
-            theme_math(r"v_{\max}", color=C_ORANGE, typography="caption").move_to(
-                eigen_axes.c2p(0.34, 2.05)
+            _eigenmode_annotation(
+                eigen_axes,
+                diagonal_basis[:, 1],
+                float(diagonal_values[-1]),
+                diagonal_values,
+                r"v_{\max}",
+                color=C_ORANGE,
             ),
         )
         left.scale_and_place(original)
         right.scale_and_place(eigenbasis)
 
         map_label = VGroup(
-            theme_math(r"x\mapsto", color=C_PURPLE, typography="caption"),
-            theme_math(r"V^\top(x-x^\star)", color=C_PURPLE, typography="caption"),
+            theme_math(r"x\mapsto", color=C_YELLOW, typography="caption"),
+            theme_math(r"V^\top(x-x^\star)", color=C_YELLOW, typography="caption"),
         ).arrange(DOWN, buff=SMALL_BUFF)
-        map_arrow = Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0)
+        map_arrow = CurvedArrow(LEFT, RIGHT, color=C_YELLOW)
         map_group = VGroup(map_label, map_arrow).arrange(DOWN)
         mid.scale_and_place(map_group, buff=SMALL_BUFF)
 
@@ -1212,8 +1460,10 @@ class GradientDescentModes(Slide):
 
     def construct(self) -> None:
         title = _start_slide(self, "Gradient descent is a scalar compromise")
-        eta = VT(1.0 / LAMBDA_MAX)
         matrix, _ = _rotated_quadratic_matrix()
+        eigenvalues, _ = _quadratic_eigendecomposition(matrix)
+        alpha, beta = float(eigenvalues[0]), float(eigenvalues[-1])
+        eta = VT(1.0 / beta)
         top, bottom = _split_rows(self.region, [2.0, 1.0])
         top_left, top_right = _split_weighted(top, [3.0, 2.0])
 
@@ -1240,7 +1490,8 @@ class GradientDescentModes(Slide):
 
         slider = _eta_slider(
             eta,
-            SliderSpec(r"\eta", 0.0, 2.0 / LAMBDA_MAX, 3, C_ORANGE),
+            SliderSpec(r"\eta", 0.0, 2.0 / beta, 3, C_ORANGE),
+            eigenvalues,
         )
         slider.scale(0.84)
         slider.move_to(frame.get_corner(UL) + RIGHT * 1.55 + DOWN * 0.32)
@@ -1260,18 +1511,18 @@ class GradientDescentModes(Slide):
         rho = VGroup(
             theme_math(r"\rho_{\mathrm{GD}}(\eta)=\max\{|1-\eta\alpha|,\ |1-\eta\beta|\}="),
             DN(
-                lambda: max(abs(1.0 - ~eta * MU), abs(1.0 - ~eta * LAMBDA_MAX)),
+                lambda: max(abs(1.0 - ~eta * alpha), abs(1.0 - ~eta * beta)),
                 num_decimal_places=3,
             ),
         ).arrange(RIGHT, buff=SMALL_BUFF)
         factors = VGroup(
             VGroup(
                 theme_math(r"1-\eta\alpha=", color=C_BLUE, typography="caption"),
-                DN(lambda: 1.0 - ~eta * MU, num_decimal_places=3),
+                DN(lambda: 1.0 - ~eta * alpha, num_decimal_places=3),
             ).arrange(RIGHT, buff=SMALL_BUFF),
             VGroup(
                 theme_math(r"1-\eta\beta=", color=C_ORANGE, typography="caption"),
-                DN(lambda: 1.0 - ~eta * LAMBDA_MAX, num_decimal_places=3),
+                DN(lambda: 1.0 - ~eta * beta, num_decimal_places=3),
             ).arrange(RIGHT, buff=SMALL_BUFF),
         ).arrange(RIGHT, buff=MED_SMALL_BUFF)
         equations = VGroup(
@@ -1302,11 +1553,11 @@ class GradientDescentModes(Slide):
         self.play(Write(trajectory), FadeIn(slider), FadeIn(responses))
         self.play(Write(equations))
         self.fragment(title="Balance the endpoints")
-        self.play(eta @ (2.0 / (MU + LAMBDA_MAX)), run_time=3.0)
+        self.play(eta @ (2.0 / (alpha + beta)), run_time=3.0)
         self.fragment(title="Let the steep mode oscillate")
-        self.play(eta @ (0.5 * (2.0 / (MU + LAMBDA_MAX) + 2.0 / LAMBDA_MAX)), run_time=3.0)
+        self.play(eta @ (0.5 * (2.0 / (alpha + beta) + 2.0 / beta)), run_time=3.0)
         self.fragment(title="Return to the safe step")
-        self.play(eta @ (1.0 / LAMBDA_MAX), run_time=2.4)
+        self.play(eta @ (1.0 / beta), run_time=2.4)
 
 
 class AdaGradKnownRuler(Slide):
@@ -1317,9 +1568,10 @@ class AdaGradKnownRuler(Slide):
         body, legend_region = _split_rows(self.region, [4.4, 0.82])
         left, right = _split_weighted(body, [1.0, 1.0])
         rotated_matrix, _ = _rotated_quadratic_matrix()
-        axis_matrix = np.diag([MU, LAMBDA_MAX])
+        eigenvalues, _ = _quadratic_eigendecomposition(rotated_matrix)
+        axis_matrix = np.diag(eigenvalues)
         x0 = np.array([2.0, 4.0], dtype=np.float64)
-        eta_gd = 1.0 / (MU + LAMBDA_MAX)
+        eta_gd = 1.0 / float(np.sum(eigenvalues))
 
         panels = []
         for region, matrix, label, radial in (
@@ -1406,7 +1658,7 @@ class AdaGradDiagonalScaling(Slide):
         body, note_region = _split_rows(self.region, [4.7, 0.55])
         rows = _split_rows(body, [1.0, 1.0])
         rotated_matrix, _ = _rotated_quadratic_matrix()
-        axis_matrix = np.diag([MU, LAMBDA_MAX])
+        axis_matrix = _quadratic_axis_matrix(rotated_matrix)
 
         row_groups = []
         for row_region, matrix, label in (
@@ -1449,9 +1701,12 @@ class AdaGradCoordinateResponse(Slide):
         title = _start_slide(self, "AdaGrad changes the gain while it moves")
         chart_region, equation_region = _split_weighted(self.region, [2.1, 0.92])
         columns = _split_weighted(chart_region, [1.0, 1.0, 1.0])
+        matrix, _ = _rotated_quadratic_matrix()
+        eigenvalues, _ = _quadratic_eigendecomposition(matrix)
+        alpha, beta = float(eigenvalues[0]), float(eigenvalues[-1])
         specs = [
-            ResponseSpec("GD: safe global step", "GD", 1.0 / LAMBDA_MAX),
-            ResponseSpec("GD: balanced\ninverse-curvature step", "GD", 2.0 / (MU + LAMBDA_MAX)),
+            ResponseSpec("GD: safe global step", "GD", 1.0 / beta),
+            ResponseSpec("GD: balanced\ninverse-curvature step", "GD", 2.0 / (alpha + beta)),
             ResponseSpec("AdaGrad: activity counter", "AdaGrad", ADAGRAD_ACTIVITY_STEP_FRACTION),
         ]
 
@@ -1459,17 +1714,17 @@ class AdaGradCoordinateResponse(Slide):
         adagrad_response = _adagrad_coordinate_response(ADAGRAD_ACTIVITY_STEP_FRACTION)
         for region, spec in zip(columns, specs, strict=True):
             if spec.method == "GD":
-                top = np.abs(_gd_response(MU, spec.eta))
-                bottom = np.abs(_gd_response(LAMBDA_MAX, spec.eta))
+                top = np.abs(_gd_response(alpha, spec.eta))
+                bottom = np.abs(_gd_response(beta, spec.eta))
                 top_note = (
                     rf"\begin{{aligned}}\eta&={spec.eta:.3f}\\"
-                    rf"|g_0|&={MU:.2f}\\"
-                    rf"|1-\eta\lambda_i|&={abs(1.0 - spec.eta * MU):.3f}\end{{aligned}}"
+                    rf"|g_0|&={alpha:.2f}\\"
+                    rf"|1-\eta\lambda_i|&={abs(1.0 - spec.eta * alpha):.3f}\end{{aligned}}"
                 )
                 bottom_note = (
                     rf"\begin{{aligned}}\eta&={spec.eta:.3f}\\"
-                    rf"|g_0|&={LAMBDA_MAX:.2f}\\"
-                    rf"|1-\eta\lambda_i|&={abs(1.0 - spec.eta * LAMBDA_MAX):.3f}\end{{aligned}}"
+                    rf"|g_0|&={beta:.2f}\\"
+                    rf"|1-\eta\lambda_i|&={abs(1.0 - spec.eta * beta):.3f}\end{{aligned}}"
                 )
                 top_callout = None
                 bottom_callout = None
@@ -1479,12 +1734,12 @@ class AdaGradCoordinateResponse(Slide):
                 top_note = (
                     rf"\begin{{aligned}}\eta_A&={spec.eta:.2f}\\"
                     rf"\text{{first move}}&={ADAGRAD_ACTIVITY_STEP_PERCENT}\%\text{{ of }}|x_0|\\"
-                    rf"|g_0|&={MU:.2f}\end{{aligned}}"
+                    rf"|g_0|&={alpha:.2f}\end{{aligned}}"
                 )
                 bottom_note = (
                     rf"\begin{{aligned}}\eta_A&={spec.eta:.2f}\\"
                     rf"\text{{first move}}&={ADAGRAD_ACTIVITY_STEP_PERCENT}\%\text{{ of }}|x_0|\\"
-                    rf"|g_0|&={LAMBDA_MAX:.2f}\end{{aligned}}"
+                    rf"|g_0|&={beta:.2f}\end{{aligned}}"
                 )
                 top_callout = "same trace"
                 bottom_callout = "curvature scale cancels"
