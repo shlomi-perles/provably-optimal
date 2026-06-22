@@ -162,8 +162,16 @@ class AdaGradLocalSqueeze(ThreeDSlide):
             opacity=0.95,
         )
         current = Dot3D(axes.c2p(float(x_t[0]), float(x_t[1]), f_t + 0.08), color=C_YELLOW, radius=0.055)
-        world = Group(axes, surface, patch, current)
+        current_label = MathTex(r"x_t", color=C_TEXT, font_size=22)
+        current_label.move_to(axes.c2p(float(x_t[0]) + 0.08, float(x_t[1]) + 0.08, f_t + 0.30))
+        axis_labels = VGroup(
+            MathTex(r"x_1", color=C_TEXT, font_size=18).move_to(axes.c2p(1.18, -1.02, 0.0)),
+            MathTex(r"x_2", color=C_TEXT, font_size=18).move_to(axes.c2p(-1.34, 1.35, 0.0)),
+            MathTex(r"f(x)", color=C_TEXT, font_size=18).move_to(axes.c2p(-1.30, -1.0, 2.65)),
+        )
+        world = Group(axes, surface, patch, current, current_label, axis_labels)
         world.scale(0.82).shift(LEFT * 2.55 + UP * 0.12 + np.array([0.0, 0.0, -0.75]))
+        self.add_fixed_orientation_mobjects(current_label, *axis_labels)
 
         equation = VGroup(
             Caption("diagonal local model"),
@@ -205,9 +213,9 @@ class AdaGradLocalSqueeze(ThreeDSlide):
             if callable(fix_in_frame):
                 fix_in_frame()
 
-        self.play(Write(title), FadeIn(axes), Create(surface), FadeIn(hud_panel[0]), Write(bar))
+        self.play(Write(title), FadeIn(axes, axis_labels), Create(surface), FadeIn(hud_panel[0]), Write(bar))
         self.fragment(title="Choose a point")
-        self.play(FadeIn(current), Write(equation[0]))
+        self.play(FadeIn(current, current_label), Write(equation[0]))
         self.fragment(title="Diagonal quadratic patch")
         self.play(Create(patch), Write(equation[1:]))
         self.move_camera(phi=69 * DEGREES, theta=-35 * DEGREES, run_time=2.0)

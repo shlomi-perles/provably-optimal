@@ -20,9 +20,11 @@ from manim import (
     UR,
     Arrow,
     Axes,
+    BraceBetweenPoints,
     Circle,
     Create,
     DashedLine,
+    DashedVMobject,
     Dot,
     FadeIn,
     FadeOut,
@@ -257,6 +259,84 @@ def _plot_frame(axes: Axes) -> Rectangle:
     return frame
 
 
+def _coordinate_grid(axes: Axes, *, step: float = 1.0) -> VGroup:
+    x_min, x_max, y_min, y_max = _axes_limits(axes)
+    grid = VGroup()
+    x_ticks = np.arange(np.ceil(x_min), np.floor(x_max) + 0.1, step)
+    y_ticks = np.arange(np.ceil(y_min), np.floor(y_max) + 0.1, step)
+    for x in x_ticks:
+        if abs(x) < 1e-8:
+            continue
+        line = Line(axes.c2p(float(x), y_min), axes.c2p(float(x), y_max))
+        line.set_stroke(C_GRID, width=0.45, opacity=0.32)
+        grid.add(line)
+    for y in y_ticks:
+        if abs(y) < 1e-8:
+            continue
+        line = Line(axes.c2p(x_min, float(y)), axes.c2p(x_max, float(y)))
+        line.set_stroke(C_GRID, width=0.45, opacity=0.32)
+        grid.add(line)
+    if y_min <= 0 <= y_max:
+        x_axis = Arrow(
+            axes.c2p(x_min + 0.12, 0),
+            axes.c2p(x_max - 0.12, 0),
+            buff=0,
+            color=C_MUTED,
+            stroke_width=0.75,
+            max_tip_length_to_length_ratio=0.018,
+        )
+        x_axis.set_opacity(0.78)
+        grid.add(x_axis)
+    if x_min <= 0 <= x_max:
+        y_axis = Arrow(
+            axes.c2p(0, y_min + 0.12),
+            axes.c2p(0, y_max - 0.12),
+            buff=0,
+            color=C_MUTED,
+            stroke_width=0.75,
+            max_tip_length_to_length_ratio=0.018,
+        )
+        y_axis.set_opacity(0.78)
+        grid.add(y_axis)
+    return grid
+
+
+def _bottom_tick(axes: Axes, x: float, label: str, *, color: str = C_TEXT) -> VGroup:
+    x_min, _, y_min, y_max = _axes_limits(axes)
+    _ = x_min
+    span_y = y_max - y_min
+    tick = Line(
+        axes.c2p(x, y_min),
+        axes.c2p(x, y_min + 0.035 * span_y),
+    )
+    tick.set_stroke(color, width=1.1, opacity=0.95)
+    tex = MathTex(label, color=color, font_size=24)
+    tex.next_to(tick, DOWN, buff=0.08)
+    return VGroup(tick, tex)
+
+
+def _data_label(
+    axes: Axes,
+    x: float,
+    y: float,
+    label: str,
+    *,
+    color: str = C_TEXT,
+    font_size: int = 23,
+) -> MathTex:
+    return MathTex(label, color=color, font_size=font_size).move_to(axes.c2p(x, y))
+
+
+def _x_marker(axes: Axes, x: float, y: float, *, color: str, size: float = 0.17) -> VGroup:
+    center = axes.c2p(x, y)
+    marker = VGroup(
+        Line(center + (LEFT + DOWN) * size / 2, center + (RIGHT + UP) * size / 2),
+        Line(center + (LEFT + UP) * size / 2, center + (RIGHT + DOWN) * size / 2),
+    )
+    marker.set_stroke(color, width=2.6, opacity=0.95)
+    return marker
+
+
 def _quadratic_values(matrix: FloatArray, x_grid: FloatArray, y_grid: FloatArray) -> FloatArray:
     return 0.5 * (
         matrix[0, 0] * x_grid**2
@@ -402,6 +482,7 @@ def _quadratic_panel(
         preserve_unit_aspect=True,
     )
     heatmap = _quadratic_heatmap(axes, matrix, width=520).set_z_index(LAYER_HEATMAP)
+    grid = _coordinate_grid(axes).set_z_index(LAYER_CONTOUR)
     levels = _quadratic_level_sets(axes, matrix)
     levels.set_z_index(LAYER_CONTOUR)
     origin = Dot(axes.c2p(0, 0), color=C_TEXT, radius=0.055)
@@ -411,9 +492,10 @@ def _quadratic_panel(
     frame = _plot_frame(axes)
     frame.set_stroke(C_FRAME, width=1.0, opacity=0.72)
     frame.set_z_index(LAYER_FRAME)
+    axes.set_opacity(0)
     axes.set_z_index(LAYER_FRAME)
     markers = VGroup(origin, origin_label).set_z_index(LAYER_MARKERS)
-    field = Group(heatmap, levels)
+    field = Group(heatmap, grid, levels)
     return Group(frame, axes, field, markers, label, _accent_rule(frame, C_BLUE))
 
 
@@ -719,6 +801,11 @@ def _bar_chart_for_response(
     title: str,
     top_values: FloatArray,
     bottom_values: FloatArray,
+    *,
+    top_note: str,
+    bottom_note: str,
+    top_callout: str | None = None,
+    bottom_callout: str | None = None,
 ) -> VGroup:
     title_parts = [Caption(part) for part in title.splitlines()]
     column_title = VGroup(*title_parts).arrange(DOWN, buff=0.02) if len(title_parts) > 1 else title_parts[0]
@@ -727,20 +814,36 @@ def _bar_chart_for_response(
         color=C_BLUE,
         width=2.25,
         height=0.78,
-        title=r"$\alpha$ coordinate",
+        title=r"$\mu$ coordinate",
     )
     bottom = _response_bars(
         values=bottom_values[::4],
         color=C_ORANGE,
         width=2.25,
         height=0.78,
-        title=r"$\beta$ coordinate",
+        title=r"$L$ coordinate",
     )
     bottom.next_to(top, DOWN, buff=0.30)
     top[3].align_to(top[0], LEFT)
     bottom[3].align_to(bottom[0], LEFT)
     rows = VGroup(top, bottom)
     chart = VGroup(column_title, rows).arrange(DOWN, buff=0.16)
+    notes = VGroup()
+    for frame_group, note in ((top, top_note), (bottom, bottom_note)):
+        note_mob = MathTex(note, color=C_TEXT, font_size=12)
+        note_mob.move_to(frame_group[0].get_corner(UL) + RIGHT * 0.40 + DOWN * 0.20)
+        notes.add(note_mob)
+    if top_callout:
+        callout = Caption(top_callout)
+        callout.set_color(C_TEAL)
+        callout.move_to(top[0].get_center() + RIGHT * 0.35)
+        notes.add(callout)
+    if bottom_callout:
+        callout = Caption(bottom_callout)
+        callout.set_color(C_TEAL)
+        callout.move_to(bottom[0].get_center() + RIGHT * 0.35)
+        notes.add(callout)
+    chart.add(notes)
     return _panel_shell(chart, buff=0.1)
 
 
@@ -779,16 +882,29 @@ class SecondOrderApproximation(Slide):
             ]
         )
         x_star = min((root.real for root in roots if abs(root.imag) < 1e-8), key=lambda x: f(np.array([x]))[0])
+        f_star = float(f(np.array([x_star]))[0])
         xs = np.linspace(-2.2, 1.72, 220)
+        dx = xs - x_t
+        fixed_lower = f_t + g_t * dx + 0.5 * 0.70 * dx**2
+        fixed_upper = f_t + g_t * dx + 0.5 * 3.00 * dx**2
+        fixed_local = f_t + g_t * dx + 0.5 * h_t * dx**2
+        y_min = min(float(np.min(fixed_lower)), float(np.min(fixed_local)), float(np.min(f(xs)))) - 0.10
+        y_max = min(max(float(np.max(f(xs))), float(np.max(fixed_upper))) + 0.12, 6.3)
 
-        axes = _make_axes((-2.2, 1.72, 1), (-0.8, 4.2, 1), x_length=7.7, y_length=4.45)
+        axes = _make_axes((-2.2, 1.72, 1), (y_min, y_max, 1), x_length=7.7, y_length=4.45)
+        axes.set_opacity(0)
+        bottom_axis = Line(axes.c2p(-2.2, y_min), axes.c2p(1.72, y_min))
+        bottom_axis.set_stroke(C_MUTED, width=0.9, opacity=0.82)
         true_curve = _smooth_curve(axes, xs, f, color=C_TEXT, width=3.2)
-        local_model = _smooth_curve(
-            axes,
-            xs,
-            lambda values: f_t + g_t * (values - x_t) + 0.5 * h_t * (values - x_t) ** 2,
-            color=C_PURPLE,
-            width=2.5,
+        local_model = DashedVMobject(
+            _smooth_curve(
+                axes,
+                xs,
+                lambda values: f_t + g_t * (values - x_t) + 0.5 * h_t * (values - x_t) ** 2,
+                color=C_PURPLE,
+                width=2.5,
+            ),
+            num_dashes=56,
         )
         lower_model = always_redraw(
             lambda: _smooth_curve(
@@ -810,18 +926,56 @@ class SecondOrderApproximation(Slide):
                 opacity=0.86,
             )
         )
-        x_t_dot = Dot(axes.c2p(x_t, f_t), color=C_YELLOW, radius=0.07)
+        x_t_dot = Dot(axes.c2p(x_t, f_t), color=C_TEXT, radius=0.07)
         newton_dot = Dot(
             axes.c2p(x_next, f_t + g_t * (x_next - x_t) + 0.5 * h_t * (x_next - x_t) ** 2),
             color=C_PURPLE,
             radius=0.07,
         )
-        star_dot = Dot(axes.c2p(float(x_star), float(f(np.array([x_star]))[0])), color=C_TEXT, radius=0.06)
-        x_t_label = MathTex(r"x_t", color=C_YELLOW, font_size=26).next_to(x_t_dot, UP + LEFT)
-        newton_label = MathTex(r"x_{t+1}", color=C_PURPLE, font_size=26).next_to(newton_dot, DOWN + RIGHT)
-        star_label = MathTex(r"x^\star", color=C_TEXT, font_size=26).next_to(star_dot, DOWN + RIGHT)
-        x_line = DashedLine(axes.c2p(x_t, -0.72), axes.c2p(x_t, 4.05), color=C_MUTED)
-        next_line = DashedLine(axes.c2p(x_next, -0.72), axes.c2p(x_next, 4.05), color=C_PURPLE)
+        star_dot = Dot(axes.c2p(float(x_star), f_star), color=C_TEXT, radius=0.06)
+        x_t_tick = _bottom_tick(axes, x_t, r"x_t")
+        next_tick = _bottom_tick(axes, x_next, r"x_{t+1}")
+        x_t_value = _data_label(axes, x_t - 0.17, f_t + 0.48, r"f(x_t)", font_size=23)
+        star_label = _data_label(axes, float(x_star) + 0.22, f_star - 0.23, r"f(x^\star)", font_size=23)
+        x_line = DashedLine(axes.c2p(x_t, y_min), axes.c2p(x_t, y_max), color=C_MUTED)
+        x_line.set_stroke(width=0.8, opacity=0.65)
+        next_line = DashedLine(axes.c2p(x_next, y_min), axes.c2p(x_next, y_max), color=C_PURPLE)
+        next_line.set_stroke(width=0.8, opacity=0.62)
+        bracket_y = y_min + 0.03 * (y_max - y_min)
+        tick_height = 0.03 * (y_max - y_min)
+        delta_bracket = VGroup(
+            Line(axes.c2p(x_t, bracket_y), axes.c2p(x_next, bracket_y)),
+            Line(
+                axes.c2p(x_t, bracket_y - 0.45 * tick_height),
+                axes.c2p(x_t, bracket_y + 0.45 * tick_height),
+            ),
+            Line(
+                axes.c2p(x_next, bracket_y - 0.45 * tick_height),
+                axes.c2p(x_next, bracket_y + 0.45 * tick_height),
+            ),
+        )
+        delta_bracket.set_stroke(C_PURPLE, width=1.35, opacity=0.95)
+        delta_label = MathTex(
+            r"\delta=-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
+            color=C_PURPLE,
+            font_size=24,
+        )
+        delta_label.move_to(axes.c2p(0.5 * (x_t + x_next), bracket_y + 0.055 * (y_max - y_min)))
+
+        def alpha_minimum() -> tuple[float, float]:
+            value = max(~alpha, 1e-3)
+            x_alpha = x_t - g_t / value
+            y_alpha = f_t + g_t * (x_alpha - x_t) + 0.5 * value * (x_alpha - x_t) ** 2
+            return float(x_alpha), float(y_alpha)
+
+        def beta_minimum() -> tuple[float, float]:
+            value = max(~beta, 1e-3)
+            x_beta = x_t - g_t / value
+            y_beta = f_t + g_t * (x_beta - x_t) + 0.5 * value * (x_beta - x_t) ** 2
+            return float(x_beta), float(y_beta)
+
+        alpha_marker = always_redraw(lambda: _x_marker(axes, *alpha_minimum(), color=C_BLUE))
+        beta_marker = always_redraw(lambda: _x_marker(axes, *beta_minimum(), color=C_ORANGE))
         frame = _plot_frame(axes)
         frame.set_fill(C_PANEL_DEEP, opacity=0.22)
         frame.set_stroke(C_FRAME, width=1.0, opacity=0.72)
@@ -830,6 +984,7 @@ class SecondOrderApproximation(Slide):
         accent = _accent_rule(frame, C_PURPLE)
         plot = VGroup(
             frame,
+            bottom_axis,
             axes,
             true_curve,
             local_model,
@@ -840,9 +995,14 @@ class SecondOrderApproximation(Slide):
             x_t_dot,
             newton_dot,
             star_dot,
-            x_t_label,
-            newton_label,
+            x_t_tick,
+            next_tick,
+            x_t_value,
             star_label,
+            delta_bracket,
+            delta_label,
+            alpha_marker,
+            beta_marker,
             plot_title,
             accent,
         )
@@ -895,14 +1055,27 @@ class SecondOrderApproximation(Slide):
         )
         right.scale_and_place(_themed_box(sidebar), buff=0.22)
 
-        self.play(Write(title), FadeIn(frame), Write(accent), Create(axes), Write(true_curve), FadeIn(x_t_dot, x_t_label, plot_title))
+        self.play(
+            Write(title),
+            FadeIn(frame),
+            Write(accent),
+            Write(bottom_axis),
+            Write(true_curve),
+            FadeIn(x_t_dot, x_t_tick, x_t_value, plot_title),
+        )
         self.play(Write(taylor))
         self.fragment(title="Newton model")
-        self.play(Write(local_model), FadeIn(newton_dot, newton_label, star_dot, star_label), Write(solve), Write(update))
+        self.play(
+            Write(local_model),
+            FadeIn(newton_dot, next_tick, star_dot, star_label, x_line, next_line, delta_bracket, delta_label),
+            Write(solve),
+            Write(update),
+        )
         self.fragment(title="Curvature envelope")
-        self.play(Write(lower_model), Write(upper_model), Write(envelope), FadeIn(readouts))
+        self.play(Write(lower_model), Write(upper_model), FadeIn(alpha_marker, beta_marker), Write(envelope), FadeIn(readouts))
         self.play(alpha @ 0.42, beta @ 4.2, run_time=2.0)
         self.play(alpha @ 0.95, beta @ 2.35, run_time=2.0)
+        self.play(alpha @ 0.70, beta @ 3.00, run_time=1.4)
 
 
 class QuadraticRotation(Slide):
@@ -1110,9 +1283,28 @@ class AdaGradKnownRuler(Slide):
                 _path_with_dots(axes, known, color=C_PURPLE, step=3),
                 _path_with_dots(axes, adagrad, color=C_TEAL, step=3),
             )
-            start = Dot(axes.c2p(float(x0[0]), float(x0[1])), color=C_YELLOW, radius=0.06)
-            start_label = MathTex(r"x_0", color=C_YELLOW, font_size=24).next_to(start, UR)
-            panel.add(paths, start, start_label)
+            start = Dot(axes.c2p(float(x0[0]), float(x0[1])), color=C_GREEN, radius=0.06)
+            start_label = MathTex(r"x_0", color=C_GREEN, font_size=24).next_to(start, UR)
+            method_key = VGroup(
+                VGroup(
+                    Dot(color=C_GREEN, radius=0.025),
+                    MathTex(
+                        r"x_{t+1}=x_t-\eta\nabla f(x_t),\ \eta=\frac{1}{\alpha+\beta}",
+                        color=C_TEXT,
+                        font_size=11,
+                    ),
+                ).arrange(RIGHT, buff=0.07),
+                VGroup(
+                    Dot(color=C_PURPLE, radius=0.025),
+                    MathTex(r"x_{t+1}=x_t-\Lambda^{-1}\nabla f(x_t)", color=C_TEXT, font_size=11),
+                ).arrange(RIGHT, buff=0.07),
+                VGroup(
+                    Dot(color=C_TEAL, radius=0.025),
+                    MathTex(r"x_{t+1}=x_t-D_t^{-1}\nabla f(x_t)", color=C_TEXT, font_size=11),
+                ).arrange(RIGHT, buff=0.07),
+            ).arrange(DOWN, aligned_edge=LEFT, buff=0.04)
+            method_key.move_to(axes.c2p(-2.10, 8.35), aligned_edge=UL)
+            panel.add(paths, VGroup(start, start_label, method_key))
             region.scale_and_place(panel, buff=0.08)
             panels.append(panel)
 
@@ -1125,7 +1317,7 @@ class AdaGradKnownRuler(Slide):
         _color_text_parts(legend, {r"D_t": C_TEAL})
         legend_region.scale_and_place(_themed_box(legend), buff=0.08)
 
-        self.play(Write(title), *(FadeIn(panel[:6]) for panel in panels))
+        self.play(Write(title), *(FadeIn(panel[:6], panel[7]) for panel in panels))
         self.fragment(title="Compare rulers")
         self.play(*(Write(panel[6][0]) for panel in panels), FadeIn(legend[0]))
         self.play(*(Write(panel[6][1]) for panel in panels), FadeIn(legend[1]))
@@ -1196,10 +1388,42 @@ class AdaGradCoordinateResponse(Slide):
             if spec.method == "GD":
                 top = np.abs(_gd_response(MU, spec.eta))
                 bottom = np.abs(_gd_response(LAMBDA_MAX, spec.eta))
+                top_note = (
+                    rf"\begin{{aligned}}\eta&={spec.eta:.3f}\\"
+                    rf"|g_0|&={MU:.2f}\\"
+                    rf"|1-\eta\lambda_i|&={abs(1.0 - spec.eta * MU):.3f}\end{{aligned}}"
+                )
+                bottom_note = (
+                    rf"\begin{{aligned}}\eta&={spec.eta:.3f}\\"
+                    rf"|g_0|&={LAMBDA_MAX:.2f}\\"
+                    rf"|1-\eta\lambda_i|&={abs(1.0 - spec.eta * LAMBDA_MAX):.3f}\end{{aligned}}"
+                )
+                top_callout = None
+                bottom_callout = None
             else:
                 top = adagrad_response
                 bottom = adagrad_response
-            chart = _bar_chart_for_response(spec.title, top, bottom)
+                top_note = (
+                    rf"\begin{{aligned}}\eta_A&={spec.eta:.2f}\\"
+                    r"\text{first move}&=15\%\text{ of }|x_0|\\"
+                    rf"|g_0|&={MU:.2f}\end{{aligned}}"
+                )
+                bottom_note = (
+                    rf"\begin{{aligned}}\eta_A&={spec.eta:.2f}\\"
+                    r"\text{first move}&=15\%\text{ of }|x_0|\\"
+                    rf"|g_0|&={LAMBDA_MAX:.2f}\end{{aligned}}"
+                )
+                top_callout = "same trace"
+                bottom_callout = "curvature scale cancels"
+            chart = _bar_chart_for_response(
+                spec.title,
+                top,
+                bottom,
+                top_note=top_note,
+                bottom_note=bottom_note,
+                top_callout=top_callout,
+                bottom_callout=bottom_callout,
+            )
             region.scale_and_place(chart, buff=0.16)
             charts.append(chart)
 
@@ -1299,8 +1523,10 @@ class AdaGradWeightedLedger(Slide):
         )
         matrix = np.diag([0.55, 1.55]) if norm_suffix == "D_t" else np.eye(2)
         heatmap = _quadratic_heatmap(axes, matrix, width=430).set_z_index(LAYER_HEATMAP)
+        grid = _coordinate_grid(axes).set_z_index(LAYER_CONTOUR)
         levels = _quadratic_level_sets(axes, matrix, count=7)
         levels.set_z_index(LAYER_CONTOUR)
+        axes.set_opacity(0)
         if norm_suffix == "D_t":
             labels = {
                 "star": r"D_t^{1/2}x^\star",
@@ -1316,6 +1542,65 @@ class AdaGradWeightedLedger(Slide):
         p_star = points["star"]
         p_xt = points["xt"]
         p_xt1 = points["xt1"]
+
+        def triangle_center() -> FloatArray:
+            return (p_star + p_xt + p_xt1) / 3.0
+
+        def readable_angle(pa: FloatArray, pb: FloatArray) -> float:
+            angle = float(np.arctan2(pb[1] - pa[1], pb[0] - pa[0]))
+            if angle > np.pi / 2:
+                angle -= np.pi
+            if angle < -np.pi / 2:
+                angle += np.pi
+            return angle
+
+        def side_normal(pa: FloatArray, pb: FloatArray, center: FloatArray) -> FloatArray:
+            segment = pb - pa
+            normal = np.array([-segment[1], segment[0]], dtype=np.float64)
+            norm = np.linalg.norm(normal)
+            if norm == 0:
+                return np.array([0.0, 1.0], dtype=np.float64)
+            normal = normal / norm
+            midpoint = 0.5 * (pa + pb)
+            if np.dot(center - midpoint, normal) < 0:
+                normal = -normal
+            return normal
+
+        def line_label(
+            pa: FloatArray,
+            pb: FloatArray,
+            text: str,
+            *,
+            side: str,
+            color: str,
+            pos: float = 0.5,
+            distance: float = 0.17,
+            font_size: int = 16,
+        ) -> MathTex:
+            center = triangle_center()
+            normal = side_normal(pa, pb, center)
+            if side == "outer":
+                normal = -normal
+            location = pa + pos * (pb - pa) + distance * normal
+            label = MathTex(text, color=color, font_size=font_size)
+            label.move_to(axes.c2p(float(location[0]), float(location[1])))
+            label.rotate(readable_angle(pa, pb))
+            return label
+
+        def point_label(key: str, font_size: int) -> MathTex:
+            center = triangle_center()
+            point = points[key]
+            direction = point - center
+            norm = np.linalg.norm(direction)
+            if norm == 0:
+                direction = np.array([0.0, -1.0], dtype=np.float64)
+            else:
+                direction = direction / norm
+            location = point + 0.38 * direction
+            return MathTex(labels[key], color=C_TEXT, font_size=font_size).move_to(
+                axes.c2p(float(location[0]), float(location[1]))
+            )
+
         old_distance = DashedLine(
             axes.c2p(float(p_xt[0]), float(p_xt[1])),
             axes.c2p(float(p_star[0]), float(p_star[1])),
@@ -1333,32 +1618,74 @@ class AdaGradWeightedLedger(Slide):
                 for point in points.values()
             )
         )
-        point_labels = VGroup(
-            *(
-                MathTex(label, font_size=18 if norm_suffix == "D_t" else 22, color=C_TEXT).next_to(
-                    Dot(axes.c2p(float(points[key][0]), float(points[key][1])), radius=0),
-                    direction,
-                    buff=0.08,
-                )
-                for key, label, direction in (
-                    ("star", labels["star"], DL),
-                    ("xt", labels["xt"], UP),
-                    ("xt1", labels["xt1"], RIGHT),
+        label_size = 17 if norm_suffix == "D_t" else 20
+        point_labels = VGroup(point_label("star", label_size), point_label("xt", label_size), point_label("xt1", label_size))
+        side_labels = VGroup(
+            line_label(
+                p_xt,
+                p_star,
+                rf"\|x_t-x^\star\|_{{{norm_suffix}}}^2",
+                side="inner",
+                color=C_MUTED,
+            ),
+            line_label(
+                p_xt1,
+                p_star,
+                rf"\|x_{{t+1}}-x^\star\|_{{{norm_suffix}}}^2",
+                side="inner",
+                color=C_MUTED,
+                pos=0.52,
+            ),
+            line_label(
+                p_xt,
+                p_xt1,
+                rf"\|x_{{t+1}}-x_t\|_{{{norm_suffix}}}^2",
+                side="inner",
+                color=C_RED,
+                pos=0.54,
+            ),
+        )
+        extras = VGroup()
+        if norm_suffix == "D_t":
+            extras.add(
+                line_label(p_xt, p_star, r"A", side="outer", color=C_TEXT, distance=0.23, font_size=18),
+                line_label(p_xt, p_xt1, r"B", side="outer", color=C_TEXT, pos=0.47, distance=0.23, font_size=18),
+                line_label(p_xt1, p_star, r"A-B", side="outer", color=C_TEXT, distance=0.23, font_size=17),
+            )
+            center = triangle_center()
+            outer = -side_normal(p_xt, p_star, center)
+            brace_start = p_xt + 0.16 * (p_star - p_xt)
+            brace_end = p_xt + 0.42 * (p_star - p_xt)
+            brace = BraceBetweenPoints(
+                axes.c2p(float(brace_start[0]), float(brace_start[1])),
+                axes.c2p(float(brace_end[0]), float(brace_end[1])),
+                direction=np.array([outer[0], outer[1], 0.0]),
+                color=C_PURPLE,
+            )
+            p_point = p_xt + 0.40 * (p_star - p_xt)
+            open_point = Circle(radius=0.055, color=C_PURPLE).move_to(
+                axes.c2p(float(p_point[0]), float(p_point[1]))
+            )
+            open_point.set_fill(C_PANEL_DEEP, opacity=1.0)
+            p_label = MathTex(r"P", color=C_PURPLE, font_size=20).next_to(brace, LEFT, buff=0.08)
+            extras.add(brace, p_label, open_point)
+        else:
+            extras.add(
+                line_label(
+                    p_xt,
+                    p_xt1,
+                    r"\eta\nabla f(x_t)",
+                    side="outer",
+                    color=C_RED,
+                    pos=0.35,
+                    distance=0.24,
+                    font_size=15,
                 )
             )
-        )
-        side_labels = VGroup(
-            MathTex(rf"\|x_t-x^\star\|_{{{norm_suffix}}}^2", color=C_MUTED, font_size=20),
-            MathTex(rf"\|x_{{t+1}}-x^\star\|_{{{norm_suffix}}}^2", color=C_MUTED, font_size=20),
-            MathTex(rf"\|x_t-x_{{t+1}}\|_{{{norm_suffix}}}^2", color=C_RED, font_size=20),
-        )
-        side_labels[0].move_to(axes.c2p(-1.0, 1.35))
-        side_labels[1].move_to(axes.c2p(1.0, 0.55))
-        side_labels[2].move_to(axes.c2p(0.1, 2.45))
         caption = Caption(title).next_to(axes, UP, buff=0.12)
         frame = Rectangle(width=axes.width, height=axes.height)
         frame.move_to(axes)
         frame.set_stroke(C_FRAME, width=0.8, opacity=0.54)
-        field = Group(heatmap, levels)
-        distances = VGroup(old_distance, new_distance, step, dots, point_labels, side_labels)
+        field = Group(heatmap, grid, levels)
+        distances = VGroup(old_distance, new_distance, step, dots, point_labels, side_labels, extras)
         return Group(frame, axes, field, distances, caption, _accent_rule(frame, C_TEAL))
