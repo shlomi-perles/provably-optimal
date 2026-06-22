@@ -35,15 +35,15 @@ from manim import (
 )
 from simplex import Caption, DN, Slide, VT, color_substrings, get_active_theme
 
-from slides.controls import SliderSpec, ValueSlider
-from slides.plotting import (
+from slides.helpers.controls import SliderSpec, ValueSlider
+from slides.helpers.plotting import (
     axes_point as _axes_point,
     blue_alpha_heatmap as _blue_alpha_heatmap,
     normalize_heat as _normalize_heat,
     plot_frame as _plot_frame,
     sample_contour_points as _sample_contour_points,
 )
-from slides.style import (
+from slides.helpers.style import (
     C_CONTOUR,
     C_FRAME,
     C_MUTED,

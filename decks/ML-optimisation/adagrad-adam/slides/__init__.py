@@ -1,7 +1,7 @@
-"""Scene modules live alongside this file (e.g. `intro.py`).
+"""Slide entrypoint modules for the AdaGrad and Adam deck.
 
-Reference them from `deck.toml` as `entrypoints = ["slides.intro:Intro", ...]`;
-the runner loads each entrypoint module directly. Don't re-export scene
-classes here -- manim's discovery filters by `__module__`, so re-exports
-are silently dropped.
+Each rendered slide lives in its own module and shared building blocks live
+under ``slides.helpers``. Reference scene classes from ``deck.toml`` by their
+defining modules; do not re-export them here because Manim filters scene
+classes by ``__module__`` during discovery.
 """

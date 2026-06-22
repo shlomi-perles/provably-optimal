@@ -1,15 +1,15 @@
 date = "2026-06-15"
 entrypoints = [
     "slides.intro:Intro",
-    "slides.figures:SecondOrderApproximation",
-    "slides.figures:QuadraticRotation",
-    "slides.figures:GradientDescentModes",
+    "slides.second_order_approximation:SecondOrderApproximation",
+    "slides.quadratic_rotation:QuadraticRotation",
+    "slides.gradient_descent_modes:GradientDescentModes",
     "slides.rosenbrock_momentum:MomentumRosenbrock",
-    "slides.figures:AdaGradKnownRuler",
-    "slides.figures:AdaGradDiagonalScaling",
+    "slides.adagrad_known_ruler:AdaGradKnownRuler",
+    "slides.adagrad_diagonal_scaling:AdaGradDiagonalScaling",
     "slides.local_squeeze:AdaGradLocalSqueeze@opengl",
-    "slides.figures:AdaGradCoordinateResponse",
-    "slides.figures:AdaGradWeightedLedger",
+    "slides.adagrad_coordinate_response:AdaGradCoordinateResponse",
+    "slides.adagrad_weighted_ledger:AdaGradWeightedLedger",
 ]
 order = 1000
 slug = "adagrad-adam"

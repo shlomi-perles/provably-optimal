@@ -29,7 +29,7 @@ config.write_to_movie = True
 
 from simplex import Caption, ColorBar, ScalarFieldSurface, ThreeDSlide, get_active_theme
 
-from slides.style import (
+from slides.helpers.style import (
     C_BLUE,
     C_GREEN,
     C_ORANGE,

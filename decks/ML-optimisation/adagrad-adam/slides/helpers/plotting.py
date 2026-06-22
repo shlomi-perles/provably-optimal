@@ -6,7 +6,7 @@ import numpy as np
 import numpy.typing as npt
 from manim import Axes, Rectangle
 
-from slides.style import C_FRAME, C_MUTED, HEATMAP_BLUE, HEATMAP_MAX_ALPHA
+from slides.helpers.style import C_FRAME, C_MUTED, HEATMAP_BLUE, HEATMAP_MAX_ALPHA
 
 FloatArray = npt.NDArray[np.float64]
 

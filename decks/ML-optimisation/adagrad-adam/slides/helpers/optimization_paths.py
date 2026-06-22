@@ -8,8 +8,8 @@ import numpy as np
 import numpy.typing as npt
 from manim import Axes, Circle, Dot, Line, VGroup
 
-from slides.plotting import axes_point, inside_axes, plot_frame
-from slides.style import C_YELLOW
+from slides.helpers.plotting import axes_point, inside_axes, plot_frame
+from slides.helpers.style import C_YELLOW
 
 FloatArray = npt.NDArray[np.float64]
 

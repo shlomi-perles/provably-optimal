@@ -9,7 +9,7 @@ import numpy as np
 from manim import DOWN, LEFT, RIGHT, SMALL_BUFF, UP, Dot, Line, MathTex, VGroup, always_redraw
 from simplex import DN, VT, get_active_theme
 
-from slides.style import C_TEXT, C_MUTED
+from slides.helpers.style import C_TEXT, C_MUTED
 
 SLIDER_TRACK_STROKE_WIDTH = 5
 SLIDER_FILL_STROKE_WIDTH = 7
