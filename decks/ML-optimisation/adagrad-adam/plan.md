@@ -45,3 +45,43 @@
 - Scope is exactly the 8 figures embedded in `main_intro_gd.tex`; the 3 extra generator-catalog figures remain out of scope.
 - The new slides should be self-contained Manim code, not runtime imports from the external notes directory.
 - Existing `MomentumRosenbrock` stays as an additional live demo because it already matches the requested animated-parameter style.
+# TODO:
+1. For eigenvectors -- arrow tip size should always be same size (not depand on the vector's length). (If there are other slides with eigenvector -- do the same).
+2. The size length of the vectors should be the unit vector * the eigen value (If there are other slides with eigenvector -- do the same).
+
+Its still a poor code.
+Examples (those are case examples, you need to generalize from these examples):
+1.
+    `x_values = np.linspace(x_min, x_max, 260)
+    y_values = np.linspace(y_min, y_max, 260)`
+    
+Why writing 260 twice? In general -- try using megic number as much as you can. I want it to be easy to change values.
+
+2. `label.next_to(axes, UP, buff=0.14)`
+
+I told you -- if passing default value that is close to the original default value -- avoid it. So simply write `label.next_to(axes, UP)`
+
+3. `MathTex(r"x^\star", color=C_TEXT, font_size=24).next_to(origin, DOWN + RIGHT)`
+Whats the meaning of the font_size=24? nothing... Better scale it relative to something, for example:
+    `LABELS_TEX_DOT_SCALE = 2
+    origin_label = MathTex(r"x^\star", color=C_TEXT)
+    scale_to_fit_mobject(origin_label, origin, scaleback=LABELS_TEX_DOT_SCALE)
+    origin_label.next_to(origin, DR)`
+    
+
+
+1. No need to place `Title` mobjects, they are auto place on top of the slide. exaple:
+
+Instead of
+```
+self.region.place(title, UP)
+self.region.update(top=title)
+```
+
+better write:
+    
+```
+self.region.update(top=title)
+```
+
+2. 

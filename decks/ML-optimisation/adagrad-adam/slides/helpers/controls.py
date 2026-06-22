@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 import numpy as np
-from manim import DOWN, LEFT, RIGHT, SMALL_BUFF, UP, Dot, Line, MathTex, VGroup, always_redraw
+from manim import DOWN, LEFT, RIGHT, SMALL_BUFF, UP, Dot, Line, MathTex, VGroup
 from simplex import DN, VT, get_active_theme
 
 from slides.helpers.style import C_TEXT, C_MUTED
@@ -65,19 +65,20 @@ class ValueSlider(VGroup):
             value.next_to(track, RIGHT)
             value.add_updater(lambda mob: mob.next_to(track, RIGHT))
 
-        fill = always_redraw(
-            lambda: Line(
+        fill = Line(track.get_start(), self._slider_point(track, tracker, spec))
+        fill.set_stroke(spec.color, width=SLIDER_FILL_STROKE_WIDTH)
+        fill.add_updater(
+            lambda mob: mob.put_start_and_end_on(
                 track.get_start(),
-                track.point_from_proportion(slider_alpha(tracker, spec)),
-            ).set_stroke(spec.color, width=SLIDER_FILL_STROKE_WIDTH)
-        )
-        knob = always_redraw(
-            lambda: Dot(
-                track.point_from_proportion(slider_alpha(tracker, spec)),
-                color=spec.color,
-                radius=SMALL_BUFF,
+                self._slider_point(track, tracker, spec),
             )
         )
+        knob = Dot(
+            self._slider_point(track, tracker, spec),
+            color=spec.color,
+            radius=SMALL_BUFF,
+        )
+        knob.add_updater(lambda mob: mob.move_to(self._slider_point(track, tracker, spec)))
         ticks = VGroup(*(self._tick(track, tracker_value, spec) for tracker_value in tick_values))
         mobjects = [label, track, ticks, fill, knob, value]
         if show_endpoint_labels:
@@ -107,6 +108,10 @@ class ValueSlider(VGroup):
         tick.set_stroke(C_TEXT, width=SLIDER_TICK_STROKE_WIDTH, opacity=SLIDER_TICK_OPACITY)
         tick.move_to(track.point_from_proportion(float(np.clip(tick_alpha, 0, 1))))
         return tick
+
+    @staticmethod
+    def _slider_point(track: Line, tracker: VT, spec: SliderSpec) -> np.ndarray:
+        return track.point_from_proportion(slider_alpha(tracker, spec))
 
 
 def slider_alpha(tracker: VT, spec: SliderSpec) -> float:
