@@ -11,6 +11,7 @@ entrypoints = [
     "slides.local_squeeze:AdaGradLocalSqueeze@opengl",
     "slides.adagrad_coordinate_response:AdaGradCoordinateResponse",
     "slides.adagrad_weighted_ledger:AdaGradWeightedLedger",
+    "slides.reminder_example:ReminderExample",
 ]
 order = 1000
 slug = "adagrad-adam"
