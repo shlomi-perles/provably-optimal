@@ -12,9 +12,13 @@ import numpy.typing as npt
 from manim import (
     DL,
     DOWN,
+    DR,
     LEFT,
+    MED_LARGE_BUFF,
+    MED_SMALL_BUFF,
     ORIGIN,
     RIGHT,
+    SMALL_BUFF,
     UP,
     UL,
     UR,
@@ -73,11 +77,13 @@ from slides.style import (
     accent_rule as _accent_rule,
     color_text_parts as _color_text_parts,
     formula_stack as _formula_stack,
+    label_for_dot,
     split_rows as _split_rows,
     split_weighted as _split_weighted,
     start_slide as _start_slide,
     themed_box as _themed_box,
     panel_shell as _panel_shell,
+    theme_math,
 )
 
 FloatArray = npt.NDArray[np.float64]
@@ -86,7 +92,132 @@ MU = 0.02
 LAMBDA_MAX = 1.0
 BASE_THETA_DEG = 28.0
 BASE_INITIAL_VECTOR = np.array([5.05, 1.42], dtype=np.float64)
-T_STEPS = np.arange(0, 151, dtype=np.float64)
+RESPONSE_STEP_COUNT = 150
+T_STEPS = np.arange(0, RESPONSE_STEP_COUNT + 1, dtype=np.float64)
+
+ZERO_AXIS_EPSILON = 1e-8
+GRID_TICK_STOP_EPSILON = 0.1
+POLYLINE_FALLBACK_STEP = 1e-3
+GRID_LINE_STROKE_WIDTH = 0.45
+GRID_LINE_OPACITY = 0.32
+GRID_AXIS_INSET_RATIO = 0.03
+GRID_AXIS_STROKE_WIDTH = 0.75
+GRID_AXIS_OPACITY = 0.78
+GRID_AXIS_TIP_RATIO = 0.018
+BOTTOM_TICK_HEIGHT_RATIO = 0.035
+BOTTOM_TICK_STROKE_WIDTH = 1.1
+TICK_LABEL_TEX_SCALE = 2
+X_MARKER_STROKE_WIDTH = 2.6
+X_MARKER_OPACITY = 0.95
+X_MARKER_FRAME_HEIGHT_RATIO = 0.05
+CONTOUR_GRID_SAMPLES = 260
+CONTOUR_POLYLINE_MAX_POINTS = 150
+CONTOUR_STROKE_WIDTH = 1.05
+CONTOUR_OPACITY_RANGE = (0.32, 0.72)
+CONTOUR_QUANTILE_RANGE = (0.07, 0.92)
+AXIS_ARROW_TIP_RATIO = 0.09
+DEFAULT_QUADRATIC_HEATMAP_WIDTH = 640
+QUADRATIC_PANEL_HEATMAP_WIDTH = 520
+LEDGER_HEATMAP_WIDTH = 430
+HEATMAP_MIN_HEIGHT = 80
+PANEL_MARKER_FRAME_HEIGHT_RATIO = 1 / 64
+PATH_LINE_STROKE_WIDTH = 2.5
+PATH_DOT_FRAME_HEIGHT_RATIO = 1 / 110
+PATH_END_DOT_SCALE = 1.3
+MODE_TRAJECTORY_STROKE_WIDTH = 2.0
+MODE_TRAJECTORY_OPACITY = 0.88
+MODE_DOT_FRAME_HEIGHT_RATIO = 1 / 155
+MODE_START_DOT_SCALE = 1.55
+MODE_VECTOR_ARROW_SCALE = 1.4
+MODE_ARROW_INTERVAL = 10
+MODE_ARROW_OPACITY_RANGE = (0.25, 0.9)
+MODE_INITIAL_POINT = np.array([6.0, 8.0], dtype=np.float64)
+MODE_TRAJECTORY_STEPS = 50
+RESPONSE_BAR_WIDTH_FRACTION = 0.72
+RESPONSE_BAR_MIN_HEIGHT = 0.015
+RESPONSE_BAR_OPACITY = 0.85
+RESPONSE_FRAME_FILL_OPACITY = 0.18
+RESPONSE_FRAME_STROKE_OPACITY = 0.42
+RESPONSE_BASELINE_STROKE_WIDTH = 0.7
+RESPONSE_FRAME_STROKE_WIDTH = 0.8
+RESPONSE_CHART_WIDTH = 2.25
+RESPONSE_CHART_HEIGHT = 0.78
+RESPONSE_SAMPLE_STRIDE = 4
+ETA_SLIDER_HALF_LENGTH = 1.28
+MODE_CHART_STEP_STRIDE = 2
+MODE_CHART_MIN_Y_MAX = 15.0
+MODE_CHART_Y_STEP = 10.0
+MODE_CHART_HEADROOM = 1.05
+MODE_CHART_FRAME_STROKE_WIDTH = 0.9
+MODE_CHART_FRAME_OPACITY = 0.75
+MODE_CHART_BASELINE_STROKE_WIDTH = 0.8
+MODE_CHART_BASELINE_OPACITY = 0.76
+MODE_CHART_EPSILON = 0.1
+MODE_CHART_EPSILON_STROKE_WIDTH = 0.65
+MODE_CHART_EPSILON_OPACITY = 0.52
+MODE_CHART_BAR_WIDTH_FRACTION = 0.62
+MODE_CHART_BAR_MIN_HEIGHT_RATIO = 1 / 200
+MODE_CHART_BAR_PLACEHOLDER_RATIO = 1 / 100
+MODE_CHART_BAR_OPACITY = 0.88
+MODE_CHART_TAG_OFFSET = RIGHT * 0.60 + DOWN * 0.15
+MODE_CHART_READOUT_OFFSET = LEFT * 0.55 + DOWN * 0.18
+MULTILINE_TITLE_BUFF = SMALL_BUFF / 5
+LEDGER_PROOF_COLUMN_BUFF = 0.7
+LEDGER_LABEL_DISTANCE = 0.17
+LEDGER_LABEL_OUTER_DISTANCE = 0.23
+LEDGER_B_LABEL_POSITION = 0.47
+LEDGER_NEW_DISTANCE_LABEL_POSITION = 0.52
+LEDGER_STEP_LABEL_POSITION = 0.54
+LEDGER_EUCLIDEAN_STEP_LABEL_POSITION = 0.35
+LEDGER_EUCLIDEAN_STEP_LABEL_DISTANCE = 0.24
+LEDGER_POINT_LABEL_DISTANCE = 0.38
+LEDGER_P_PROJECTION_START = 0.16
+LEDGER_P_PROJECTION_END = 0.42
+LEDGER_P_POINT_POSITION = 0.40
+LEDGER_FRAME_STROKE_WIDTH = 0.8
+LEDGER_FRAME_STROKE_OPACITY = 0.54
+LOCAL_CURVE_SAMPLES = 220
+LOCAL_ALPHA_INITIAL = 0.70
+LOCAL_BETA_INITIAL = 3.00
+LOCAL_ALPHA_SWEEP_VALUES = (0.42, 0.95, LOCAL_ALPHA_INITIAL)
+LOCAL_BETA_SWEEP_VALUES = (4.20, 2.35, LOCAL_BETA_INITIAL)
+LOCAL_SWEEP_RUN_TIMES = (2.0, 2.0, 1.4)
+LOCAL_MODEL_CENTER = 0.35
+LOCAL_CURRENT_X = -1.15
+LOCAL_QUADRATIC_CENTER = 0.15
+LOCAL_QUARTIC_WEIGHT = 0.04
+LOCAL_QUADRATIC_WEIGHT = 0.42
+LOCAL_VALUE_OFFSET = 0.18
+LOCAL_X_RANGE = (-2.2, 1.72, 1.0)
+LOCAL_AXIS_X_LENGTH = 7.7
+LOCAL_AXIS_Y_LENGTH = 4.45
+LOCAL_Y_PADDING_BELOW = 0.10
+LOCAL_Y_PADDING_ABOVE = 0.12
+LOCAL_Y_MAX_CAP = 6.3
+LOCAL_CURVE_STROKE_WIDTH = 3.2
+LOCAL_MODEL_STROKE_WIDTH = 2.5
+LOCAL_BOUND_STROKE_WIDTH = 2.0
+LOCAL_BOUND_OPACITY = 0.86
+LOCAL_MODEL_DASH_COUNT = 56
+LOCAL_BOTTOM_AXIS_STROKE_WIDTH = 0.9
+LOCAL_BOTTOM_AXIS_OPACITY = 0.82
+LOCAL_VERTICAL_GUIDE_STROKE_WIDTH = 0.8
+LOCAL_CURRENT_GUIDE_OPACITY = 0.65
+LOCAL_NEXT_GUIDE_OPACITY = 0.62
+LOCAL_BRACKET_Y_RATIO = 0.03
+LOCAL_BRACKET_TICK_HEIGHT_RATIO = 0.03
+LOCAL_BRACKET_HALF_TICK_SCALE = 0.45
+LOCAL_BRACKET_STROKE_WIDTH = 1.35
+LOCAL_BRACKET_LABEL_Y_RATIO = 0.055
+LOCAL_PANEL_FILL_OPACITY = 0.22
+LOCAL_PANEL_STROKE_WIDTH = 1.0
+LOCAL_PANEL_STROKE_OPACITY = 0.72
+LOCAL_F_LABEL_OFFSET = np.array([-0.17, 0.48], dtype=np.float64)
+LOCAL_STAR_LABEL_OFFSET = np.array([0.22, -0.23], dtype=np.float64)
+SECOND_ORDER_MARKER_FRAME_HEIGHT_RATIO = 1 / 64
+SECOND_ORDER_STAR_DOT_SCALE = 0.85
+ADAGRAD_ACTIVITY_STEP_FRACTION = 0.15
+ADAGRAD_ACTIVITY_STEP_PERCENT = int(100 * ADAGRAD_ACTIVITY_STEP_FRACTION)
 
 @dataclass(frozen=True, slots=True)
 class ResponseSpec:
@@ -118,42 +249,44 @@ def _rotated_quadratic_matrix() -> tuple[FloatArray, FloatArray]:
 
 def _coordinate_grid(axes: Axes, *, step: float = 1.0) -> VGroup:
     x_min, x_max, y_min, y_max = _axes_limits(axes)
+    axis_x_inset = GRID_AXIS_INSET_RATIO * (x_max - x_min)
+    axis_y_inset = GRID_AXIS_INSET_RATIO * (y_max - y_min)
     grid = VGroup()
-    x_ticks = np.arange(np.ceil(x_min), np.floor(x_max) + 0.1, step)
-    y_ticks = np.arange(np.ceil(y_min), np.floor(y_max) + 0.1, step)
+    x_ticks = np.arange(np.ceil(x_min), np.floor(x_max) + GRID_TICK_STOP_EPSILON, step)
+    y_ticks = np.arange(np.ceil(y_min), np.floor(y_max) + GRID_TICK_STOP_EPSILON, step)
     for x in x_ticks:
-        if abs(x) < 1e-8:
+        if abs(x) < ZERO_AXIS_EPSILON:
             continue
         line = Line(axes.c2p(float(x), y_min), axes.c2p(float(x), y_max))
-        line.set_stroke(C_GRID, width=0.45, opacity=0.32)
+        line.set_stroke(C_GRID, width=GRID_LINE_STROKE_WIDTH, opacity=GRID_LINE_OPACITY)
         grid.add(line)
     for y in y_ticks:
-        if abs(y) < 1e-8:
+        if abs(y) < ZERO_AXIS_EPSILON:
             continue
         line = Line(axes.c2p(x_min, float(y)), axes.c2p(x_max, float(y)))
-        line.set_stroke(C_GRID, width=0.45, opacity=0.32)
+        line.set_stroke(C_GRID, width=GRID_LINE_STROKE_WIDTH, opacity=GRID_LINE_OPACITY)
         grid.add(line)
     if y_min <= 0 <= y_max:
         x_axis = Arrow(
-            axes.c2p(x_min + 0.12, 0),
-            axes.c2p(x_max - 0.12, 0),
+            axes.c2p(x_min + axis_x_inset, 0),
+            axes.c2p(x_max - axis_x_inset, 0),
             buff=0,
             color=C_MUTED,
-            stroke_width=0.75,
-            max_tip_length_to_length_ratio=0.018,
+            stroke_width=GRID_AXIS_STROKE_WIDTH,
+            max_tip_length_to_length_ratio=GRID_AXIS_TIP_RATIO,
         )
-        x_axis.set_opacity(0.78)
+        x_axis.set_opacity(GRID_AXIS_OPACITY)
         grid.add(x_axis)
     if x_min <= 0 <= x_max:
         y_axis = Arrow(
-            axes.c2p(0, y_min + 0.12),
-            axes.c2p(0, y_max - 0.12),
+            axes.c2p(0, y_min + axis_y_inset),
+            axes.c2p(0, y_max - axis_y_inset),
             buff=0,
             color=C_MUTED,
-            stroke_width=0.75,
-            max_tip_length_to_length_ratio=0.018,
+            stroke_width=GRID_AXIS_STROKE_WIDTH,
+            max_tip_length_to_length_ratio=GRID_AXIS_TIP_RATIO,
         )
-        y_axis.set_opacity(0.78)
+        y_axis.set_opacity(GRID_AXIS_OPACITY)
         grid.add(y_axis)
     return grid
 
@@ -162,13 +295,11 @@ def _bottom_tick(axes: Axes, x: float, label: str, *, color: str = C_TEXT) -> VG
     x_min, _, y_min, y_max = _axes_limits(axes)
     _ = x_min
     span_y = y_max - y_min
-    tick = Line(
-        axes.c2p(x, y_min),
-        axes.c2p(x, y_min + 0.035 * span_y),
-    )
-    tick.set_stroke(color, width=1.1, opacity=0.95)
-    tex = MathTex(label, color=color, font_size=24)
-    tex.next_to(tick, DOWN, buff=0.08)
+    tick = Line(axes.c2p(x, y_min), axes.c2p(x, y_min + BOTTOM_TICK_HEIGHT_RATIO * span_y))
+    tick.set_stroke(color, width=BOTTOM_TICK_STROKE_WIDTH)
+    tex = MathTex(label, color=color)
+    tex.scale_to_fit_height(TICK_LABEL_TEX_SCALE * tick.height)
+    tex.next_to(tick, DOWN, buff=SMALL_BUFF)
     return VGroup(tick, tex)
 
 
@@ -179,18 +310,18 @@ def _data_label(
     label: str,
     *,
     color: str = C_TEXT,
-    font_size: int = 23,
+    typography: str = "caption",
 ) -> MathTex:
-    return MathTex(label, color=color, font_size=font_size).move_to(axes.c2p(x, y))
+    return theme_math(label, color=color, typography=typography).move_to(axes.c2p(x, y))
 
 
-def _x_marker(axes: Axes, x: float, y: float, *, color: str, size: float = 0.17) -> VGroup:
+def _x_marker(axes: Axes, x: float, y: float, *, color: str, size: float) -> VGroup:
     center = axes.c2p(x, y)
     marker = VGroup(
         Line(center + (LEFT + DOWN) * size / 2, center + (RIGHT + UP) * size / 2),
         Line(center + (LEFT + UP) * size / 2, center + (RIGHT + DOWN) * size / 2),
     )
-    marker.set_stroke(color, width=2.6, opacity=0.95)
+    marker.set_stroke(color, width=X_MARKER_STROKE_WIDTH, opacity=X_MARKER_OPACITY)
     return marker
 
 
@@ -202,10 +333,15 @@ def _quadratic_values(matrix: FloatArray, x_grid: FloatArray, y_grid: FloatArray
     )
 
 
-def _quadratic_heatmap(axes: Axes, matrix: FloatArray, *, width: int = 640) -> ImageMobject:
+def _quadratic_heatmap(
+    axes: Axes,
+    matrix: FloatArray,
+    *,
+    width: int = DEFAULT_QUADRATIC_HEATMAP_WIDTH,
+) -> ImageMobject:
     x_min, x_max, y_min, y_max = _axes_limits(axes)
     frame = _plot_frame(axes)
-    height = max(80, int(width * frame.height / frame.width))
+    height = max(HEATMAP_MIN_HEIGHT, int(width * frame.height / frame.width))
     x_values = np.linspace(x_min, x_max, width)
     y_values = np.linspace(y_max, y_min, height)
     x_grid, y_grid = np.meshgrid(x_values, y_values)
@@ -232,7 +368,7 @@ def _smooth_curve(
     points = [axes.c2p(float(x), float(y)) for x, y in zip(xs[mask], ys[mask], strict=True)]
     if len(points) < 2:
         points = [axes.c2p(float(xs[0]), float(np.clip(ys[0], y_min, y_max)))]
-        points.append(points[0] + RIGHT * 1e-3)
+        points.append(points[0] + RIGHT * POLYLINE_FALLBACK_STEP)
     curve.set_points_smoothly(points)
     curve.set_stroke(color, width=width, opacity=opacity)
     return curve
@@ -269,36 +405,37 @@ def _axis_arrow(
         buff=0,
         color=color,
         stroke_width=width,
-        max_tip_length_to_length_ratio=0.09,
+        max_tip_length_to_length_ratio=AXIS_ARROW_TIP_RATIO,
     )
     return arrow
 
 
 def _quadratic_level_sets(axes: Axes, matrix: FloatArray, count: int = 10) -> VGroup:
     x_min, x_max, y_min, y_max = _axes_limits(axes)
-    x_values = np.linspace(x_min, x_max, 260)
-    y_values = np.linspace(y_min, y_max, 260)
+    x_values = np.linspace(x_min, x_max, CONTOUR_GRID_SAMPLES)
+    y_values = np.linspace(y_min, y_max, CONTOUR_GRID_SAMPLES)
     x_grid, y_grid = np.meshgrid(x_values, y_values)
     log_values = np.log10(_quadratic_values(matrix, x_grid, y_grid) + 1.0)
     levels = np.linspace(
-        float(np.quantile(log_values, 0.07)),
-        float(np.quantile(log_values, 0.92)),
+        float(np.quantile(log_values, CONTOUR_QUANTILE_RANGE[0])),
+        float(np.quantile(log_values, CONTOUR_QUANTILE_RANGE[1])),
         count,
     )
     generator = contourpy.contour_generator(x=x_values, y=y_values, z=log_values)
 
     contours = VGroup()
-    for opacity, level in zip(np.linspace(0.32, 0.72, len(levels)), levels, strict=True):
+    opacities = np.linspace(*CONTOUR_OPACITY_RANGE, len(levels))
+    for opacity, level in zip(opacities, levels, strict=True):
         for segment in generator.lines(float(level)):
             if len(segment) < 2:
                 continue
-            step = max(1, len(segment) // 150)
+            step = max(1, len(segment) // CONTOUR_POLYLINE_MAX_POINTS)
             sampled = segment[::step]
             if not np.array_equal(sampled[-1], segment[-1]):
                 sampled = np.vstack([sampled, segment[-1]])
             line = VMobject()
             line.set_points_as_corners([axes.c2p(float(x), float(y)) for x, y in sampled])
-            line.set_stroke(C_CONTOUR, width=1.05, opacity=float(opacity))
+            line.set_stroke(C_CONTOUR, width=CONTOUR_STROKE_WIDTH, opacity=float(opacity))
             contours.add(line)
     return contours
 
@@ -319,15 +456,21 @@ def _quadratic_panel(
         y_length=y_length,
         preserve_unit_aspect=True,
     )
-    heatmap = _quadratic_heatmap(axes, matrix, width=520).set_z_index(LAYER_HEATMAP)
+    heatmap = _quadratic_heatmap(axes, matrix, width=QUADRATIC_PANEL_HEATMAP_WIDTH).set_z_index(
+        LAYER_HEATMAP
+    )
     grid = _coordinate_grid(axes).set_z_index(LAYER_CONTOUR)
     levels = _quadratic_level_sets(axes, matrix)
     levels.set_z_index(LAYER_CONTOUR)
-    origin = Dot(axes.c2p(0, 0), color=C_TEXT, radius=0.055)
-    origin_label = MathTex(r"x^\star", color=C_TEXT, font_size=24).next_to(origin, DOWN + RIGHT)
     label = Caption(title)
-    label.next_to(axes, UP, buff=0.14)
     frame = _plot_frame(axes)
+    origin = Dot(
+        axes.c2p(0, 0),
+        color=C_TEXT,
+        radius=frame.height * PANEL_MARKER_FRAME_HEIGHT_RATIO,
+    )
+    origin_label = label_for_dot(r"x^\star", origin, direction=DR)
+    label.next_to(axes, UP)
     frame.set_stroke(C_FRAME, width=1.0, opacity=0.72)
     frame.set_z_index(LAYER_FRAME)
     axes.set_opacity(0)
@@ -392,21 +535,22 @@ def _path_with_dots(
     *,
     color: str,
     step: int = 2,
-    radius: float = 0.035,
+    radius: float | None = None,
 ) -> VGroup:
-    line = _axes_polyline(axes, path[::step], color=color, width=2.5)
+    if radius is None:
+        radius = _plot_frame(axes).height * PATH_DOT_FRAME_HEIGHT_RATIO
+    line = _axes_polyline(axes, path[::step], color=color, width=PATH_LINE_STROKE_WIDTH)
     dots = VGroup(
         *(Dot(axes.c2p(float(x), float(y)), color=color, radius=radius) for x, y in path[::step])
     )
-    dots[-1].scale(1.3)
+    dots[-1].scale(PATH_END_DOT_SCALE)
     return VGroup(line, dots)
 
 
-def _mode_path(axes: Axes, eta: float, steps: int = 50) -> VGroup:
+def _mode_path(axes: Axes, eta: float, steps: int = MODE_TRAJECTORY_STEPS) -> VGroup:
     _, eigvecs = _rotated_quadratic_matrix()
-    x0 = np.array([6.0, 8.0], dtype=np.float64)
     eigenvalues = np.array([MU, LAMBDA_MAX], dtype=np.float64)
-    coefficients = eigvecs.T @ x0
+    coefficients = eigvecs.T @ MODE_INITIAL_POINT
     factors = 1.0 - eta * eigenvalues
     path = np.array([eigvecs @ (coefficients * factors**step) for step in range(steps + 1)])
 
@@ -420,26 +564,32 @@ def _mode_path(axes: Axes, eta: float, steps: int = 50) -> VGroup:
         screen_point = _axes_point(axes, point)
         if previous_screen is not None:
             connector = Line(previous_screen, screen_point)
-            connector.set_stroke(C_GREEN, width=2.0, opacity=0.88)
+            connector.set_stroke(
+                C_GREEN,
+                width=MODE_TRAJECTORY_STROKE_WIDTH,
+                opacity=MODE_TRAJECTORY_OPACITY,
+            )
             connectors.add(connector)
-        dot = Dot(screen_point, color=C_GREEN, radius=0.027)
+        dot = Dot(screen_point, color=C_GREEN, radius=axes.height * MODE_DOT_FRAME_HEIGHT_RATIO)
         if index == 0:
-            dot.scale(1.55)
+            dot.scale(MODE_START_DOT_SCALE)
         dots.add(dot)
         previous_screen = screen_point
 
     trajectory = VGroup(connectors, dots)
 
     arrows = VGroup()
-    for step in range(0, steps + 1, 10):
-        opacity = 0.25 + 0.65 * step / steps
+    for step in range(0, steps + 1, MODE_ARROW_INTERVAL):
+        opacity = MODE_ARROW_OPACITY_RANGE[0] + (
+            MODE_ARROW_OPACITY_RANGE[1] - MODE_ARROW_OPACITY_RANGE[0]
+        ) * step / steps
         components = [
             coefficients[0] * factors[0] ** step * eigvecs[:, 0],
             coefficients[1] * factors[1] ** step * eigvecs[:, 1],
         ]
         for vector, color, width in (
-            (components[0], C_BLUE, 1.4),
-            (components[1], C_ORANGE, 1.4),
+            (components[0], C_BLUE, MODE_VECTOR_ARROW_SCALE),
+            (components[1], C_ORANGE, MODE_VECTOR_ARROW_SCALE),
         ):
             if _inside_axes(axes, vector):
                 arrow = _axis_arrow(axes, np.zeros(2), vector, color=color, width=width)
@@ -462,21 +612,32 @@ def _response_bars(
     count = len(values)
     for index, value in enumerate(values):
         bar_height = height * float(value) / max_value
-        bar = Rectangle(width=width / count * 0.72, height=max(bar_height, 0.015))
-        bar.set_fill(color, opacity=0.85)
+        bar = Rectangle(
+            width=width / count * RESPONSE_BAR_WIDTH_FRACTION,
+            height=max(bar_height, RESPONSE_BAR_MIN_HEIGHT),
+        )
+        bar.set_fill(color, opacity=RESPONSE_BAR_OPACITY)
         bar.set_stroke(color, opacity=0)
         x = -width / 2 + width * (index + 0.5) / count
         bar.move_to([x, -height / 2 + bar.height / 2, 0])
         bars.add(bar)
 
     frame = Rectangle(width=width, height=height)
-    frame.set_fill(C_PANEL_DEEP, opacity=0.18)
-    frame.set_stroke(C_FRAME, width=0.8, opacity=0.42)
+    frame.set_fill(C_PANEL_DEEP, opacity=RESPONSE_FRAME_FILL_OPACITY)
+    frame.set_stroke(
+        C_FRAME,
+        width=RESPONSE_FRAME_STROKE_WIDTH,
+        opacity=RESPONSE_FRAME_STROKE_OPACITY,
+    )
     baseline = Line(frame.get_left(), frame.get_right())
-    baseline.set_stroke(C_MUTED, width=0.7, opacity=0.42)
+    baseline.set_stroke(
+        C_MUTED,
+        width=RESPONSE_BASELINE_STROKE_WIDTH,
+        opacity=RESPONSE_FRAME_STROKE_OPACITY,
+    )
     baseline.align_to(frame, DOWN)
     title_mob = Caption(title)
-    title_mob.next_to(frame, UP, buff=0.08)
+    title_mob.next_to(frame, UP)
     return VGroup(frame, baseline, bars, title_mob)
 
 
@@ -500,9 +661,9 @@ def _eta_slider(tracker: VT, spec: SliderSpec) -> VGroup:
     return ValueSlider(
         tracker,
         spec,
-        half_length=1.28,
+        half_length=ETA_SLIDER_HALF_LENGTH,
         label_font_size=theme.typography.caption,
-        value_font_size=theme.typography.caption - 2,
+        value_font_size=theme.typography.caption,
         tick_values=(1.0 / LAMBDA_MAX, 2.0 / (MU + LAMBDA_MAX), 2.0 / LAMBDA_MAX),
     )
 
@@ -519,34 +680,54 @@ def _mode_magnitude_chart(
     height: float,
     show_x_label: bool,
 ) -> VGroup:
-    y_max = 10.0 * np.ceil(max(15.0, coefficient**2 * 1.05) / 10.0)
+    y_max = MODE_CHART_Y_STEP * np.ceil(
+        max(MODE_CHART_MIN_Y_MAX, coefficient**2 * MODE_CHART_HEADROOM) / MODE_CHART_Y_STEP
+    )
     frame = Rectangle(width=width, height=height)
-    frame.set_stroke(C_FRAME, width=0.9, opacity=0.75)
+    frame.set_stroke(
+        C_FRAME,
+        width=MODE_CHART_FRAME_STROKE_WIDTH,
+        opacity=MODE_CHART_FRAME_OPACITY,
+    )
     baseline = Line(LEFT * width / 2, RIGHT * width / 2)
-    baseline.set_stroke(C_MUTED, width=0.8, opacity=0.76)
+    baseline.set_stroke(
+        C_MUTED,
+        width=MODE_CHART_BASELINE_STROKE_WIDTH,
+        opacity=MODE_CHART_BASELINE_OPACITY,
+    )
     baseline.move_to(frame.get_bottom())
 
-    epsilon_y = frame.get_bottom()[1] + frame.height * 0.1 / y_max
+    epsilon_y = frame.get_bottom()[1] + frame.height * MODE_CHART_EPSILON / y_max
     epsilon_line = Line(frame.get_left(), frame.get_right())
-    epsilon_line.set_stroke(C_MUTED, width=0.65, opacity=0.52)
+    epsilon_line.set_stroke(
+        C_MUTED,
+        width=MODE_CHART_EPSILON_STROKE_WIDTH,
+        opacity=MODE_CHART_EPSILON_OPACITY,
+    )
     epsilon_line.move_to([frame.get_center()[0], epsilon_y, frame.get_center()[2]])
-    epsilon_label = MathTex(r"\epsilon", color=C_MUTED, font_size=14)
-    epsilon_label.next_to(epsilon_line, RIGHT, buff=0.04)
+    epsilon_label = theme_math(r"\epsilon", color=C_MUTED, typography="caption")
+    epsilon_label.next_to(epsilon_line, RIGHT, buff=SMALL_BUFF)
 
-    steps = np.arange(0, 151, 2)
+    steps = np.arange(0, RESPONSE_STEP_COUNT + 1, MODE_CHART_STEP_STRIDE)
     bars = VGroup()
     for index, step in enumerate(steps):
-        bar = Rectangle(width=0.01, height=0.01)
+        bar = Rectangle(
+            width=frame.width * MODE_CHART_BAR_PLACEHOLDER_RATIO,
+            height=frame.height * MODE_CHART_BAR_PLACEHOLDER_RATIO,
+        )
 
         def update_bar(mob: Rectangle, *, step: int = int(step), index: int = index) -> None:
             response = abs(1.0 - ~eta * lambda_i) ** (2 * (step + 1))
             value = float(coefficient**2 * response)
-            bar_width = frame.width / len(steps) * 0.62
-            bar_height = max(frame.height * min(value / y_max, 1.0), 0.004)
+            bar_width = frame.width / len(steps) * MODE_CHART_BAR_WIDTH_FRACTION
+            bar_height = max(
+                frame.height * min(value / y_max, 1.0),
+                frame.height * MODE_CHART_BAR_MIN_HEIGHT_RATIO,
+            )
             x = frame.get_left()[0] + frame.width * (index + 0.5) / len(steps)
             y = frame.get_bottom()[1] + bar_height / 2
             replacement = Rectangle(width=bar_width, height=bar_height)
-            replacement.set_fill(color, opacity=0.88)
+            replacement.set_fill(color, opacity=MODE_CHART_BAR_OPACITY)
             replacement.set_stroke(color, opacity=0)
             replacement.move_to([x, y, frame.get_center()[2]])
             mob.become(replacement)
@@ -554,30 +735,30 @@ def _mode_magnitude_chart(
         bar.add_updater(update_bar)
         bars.add(bar)
 
-    y_label = MathTex(
+    y_label = theme_math(
         rf"\|(1-\eta\lambda_{mode_index})^{{t+1}}\alpha_{mode_index}v_{mode_index}\|_2^2",
         color=color,
-        font_size=15,
+        typography="caption",
     )
     y_label.rotate(PI / 2)
-    y_label.next_to(frame, LEFT, buff=0.10)
-    tag = MathTex(mode_tag, color=color, font_size=17)
-    tag.move_to(frame.get_corner(UL) + RIGHT * 0.60 + DOWN * 0.15)
+    y_label.next_to(frame, LEFT, buff=SMALL_BUFF)
+    tag = theme_math(mode_tag, color=color, typography="caption")
+    tag.move_to(frame.get_corner(UL) + MODE_CHART_TAG_OFFSET)
     r_readout = VGroup(
-        MathTex(r"r_i=", color=C_MUTED, font_size=18),
-        DN(lambda: 1.0 - ~eta * lambda_i, num_decimal_places=3, font_size=17),
-    ).arrange(RIGHT, buff=0.06)
-    r_readout.move_to(frame.get_corner(UR) + LEFT * 0.55 + DOWN * 0.18)
+        theme_math(r"r_i=", color=C_MUTED, typography="caption"),
+        DN(lambda: 1.0 - ~eta * lambda_i, num_decimal_places=3),
+    ).arrange(RIGHT, buff=SMALL_BUFF)
+    r_readout.move_to(frame.get_corner(UR) + MODE_CHART_READOUT_OFFSET)
     x_label = Caption(r"even iteration $t$") if show_x_label else VGroup()
     if show_x_label:
-        x_label.next_to(frame, DOWN, buff=0.08)
+        x_label.next_to(frame, DOWN)
     return VGroup(frame, baseline, epsilon_line, epsilon_label, bars, y_label, tag, r_readout, x_label)
 
 
 def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -> VGroup:
     title = Caption("squared mode magnitudes")
     _, eigvecs = _rotated_quadratic_matrix()
-    coefficients = eigvecs.T @ np.array([6.0, 8.0], dtype=np.float64)
+    coefficients = eigvecs.T @ MODE_INITIAL_POINT
     flat = _mode_magnitude_chart(
         eta,
         MU,
@@ -600,8 +781,8 @@ def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -
         height=height,
         show_x_label=True,
     )
-    charts = VGroup(flat, steep).arrange(DOWN, buff=0.33, aligned_edge=RIGHT)
-    title.next_to(charts, UP, buff=0.12)
+    charts = VGroup(flat, steep).arrange(DOWN, buff=MED_SMALL_BUFF, aligned_edge=RIGHT)
+    title.next_to(charts, UP)
     return VGroup(title, charts)
 
 
@@ -616,29 +797,33 @@ def _bar_chart_for_response(
     bottom_callout: str | None = None,
 ) -> VGroup:
     title_parts = [Caption(part) for part in title.splitlines()]
-    column_title = VGroup(*title_parts).arrange(DOWN, buff=0.02) if len(title_parts) > 1 else title_parts[0]
+    column_title = (
+        VGroup(*title_parts).arrange(DOWN, buff=MULTILINE_TITLE_BUFF)
+        if len(title_parts) > 1
+        else title_parts[0]
+    )
     top = _response_bars(
-        values=top_values[::4],
+        values=top_values[::RESPONSE_SAMPLE_STRIDE],
         color=C_BLUE,
-        width=2.25,
-        height=0.78,
+        width=RESPONSE_CHART_WIDTH,
+        height=RESPONSE_CHART_HEIGHT,
         title=r"$\mu$ coordinate",
     )
     bottom = _response_bars(
-        values=bottom_values[::4],
+        values=bottom_values[::RESPONSE_SAMPLE_STRIDE],
         color=C_ORANGE,
-        width=2.25,
-        height=0.78,
+        width=RESPONSE_CHART_WIDTH,
+        height=RESPONSE_CHART_HEIGHT,
         title=r"$L$ coordinate",
     )
-    bottom.next_to(top, DOWN, buff=0.30)
+    bottom.next_to(top, DOWN, buff=MED_SMALL_BUFF)
     top[3].align_to(top[0], LEFT)
     bottom[3].align_to(bottom[0], LEFT)
     rows = VGroup(top, bottom)
-    chart = VGroup(column_title, rows).arrange(DOWN, buff=0.16)
+    chart = VGroup(column_title, rows).arrange(DOWN)
     notes = VGroup()
     for frame_group, note in ((top, top_note), (bottom, bottom_note)):
-        note_mob = MathTex(note, color=C_TEXT, font_size=12)
+        note_mob = theme_math(note, color=C_TEXT, typography="caption")
         note_mob.move_to(frame_group[0].get_corner(UL) + RIGHT * 0.40 + DOWN * 0.20)
         notes.add(note_mob)
     if top_callout:
@@ -661,21 +846,27 @@ class SecondOrderApproximation(Slide):
     def construct(self) -> None:
         title = _start_slide(self, "Second-order approximation")
         left, right = _split_weighted(self.region, [1.72, 1.0])
-        theme = get_active_theme()
 
-        alpha = VT(0.70)
-        beta = VT(3.00)
-        center = 0.35
-        x_t = -1.15
+        alpha = VT(LOCAL_ALPHA_INITIAL)
+        beta = VT(LOCAL_BETA_INITIAL)
+        center = LOCAL_MODEL_CENTER
+        x_t = LOCAL_CURRENT_X
 
         def f(xs: FloatArray) -> FloatArray:
-            return 0.04 * (xs - center) ** 4 + 0.42 * (xs - 0.15) ** 2 + 0.18
+            return (
+                LOCAL_QUARTIC_WEIGHT * (xs - center) ** 4
+                + LOCAL_QUADRATIC_WEIGHT * (xs - LOCAL_QUADRATIC_CENTER) ** 2
+                + LOCAL_VALUE_OFFSET
+            )
 
         def grad(x: float) -> float:
-            return 0.16 * (x - center) ** 3 + 0.84 * (x - 0.15)
+            return (
+                4 * LOCAL_QUARTIC_WEIGHT * (x - center) ** 3
+                + 2 * LOCAL_QUADRATIC_WEIGHT * (x - LOCAL_QUADRATIC_CENTER)
+            )
 
         def hess(x: float) -> float:
-            return 0.48 * (x - center) ** 2 + 0.84
+            return 12 * LOCAL_QUARTIC_WEIGHT * (x - center) ** 2 + 2 * LOCAL_QUADRATIC_WEIGHT
 
         f_t = float(f(np.array([x_t]))[0])
         g_t = grad(x_t)
@@ -683,36 +874,56 @@ class SecondOrderApproximation(Slide):
         x_next = x_t - g_t / h_t
         roots = np.roots(
             [
-                0.16,
-                -0.48 * center,
-                0.48 * center**2 + 0.84,
-                -0.16 * center**3 - 0.84 * 0.15,
+                4 * LOCAL_QUARTIC_WEIGHT,
+                -12 * LOCAL_QUARTIC_WEIGHT * center,
+                12 * LOCAL_QUARTIC_WEIGHT * center**2 + 2 * LOCAL_QUADRATIC_WEIGHT,
+                -(4 * LOCAL_QUARTIC_WEIGHT * center**3)
+                - 2 * LOCAL_QUADRATIC_WEIGHT * LOCAL_QUADRATIC_CENTER,
             ]
         )
-        x_star = min((root.real for root in roots if abs(root.imag) < 1e-8), key=lambda x: f(np.array([x]))[0])
+        x_star = min(
+            (root.real for root in roots if abs(root.imag) < ZERO_AXIS_EPSILON),
+            key=lambda x: f(np.array([x]))[0],
+        )
         f_star = float(f(np.array([x_star]))[0])
-        xs = np.linspace(-2.2, 1.72, 220)
+        x_min, x_max, x_step = LOCAL_X_RANGE
+        xs = np.linspace(x_min, x_max, LOCAL_CURVE_SAMPLES)
         dx = xs - x_t
-        fixed_lower = f_t + g_t * dx + 0.5 * 0.70 * dx**2
-        fixed_upper = f_t + g_t * dx + 0.5 * 3.00 * dx**2
+        fixed_lower = f_t + g_t * dx + 0.5 * LOCAL_ALPHA_INITIAL * dx**2
+        fixed_upper = f_t + g_t * dx + 0.5 * LOCAL_BETA_INITIAL * dx**2
         fixed_local = f_t + g_t * dx + 0.5 * h_t * dx**2
-        y_min = min(float(np.min(fixed_lower)), float(np.min(fixed_local)), float(np.min(f(xs)))) - 0.10
-        y_max = min(max(float(np.max(f(xs))), float(np.max(fixed_upper))) + 0.12, 6.3)
+        y_min = (
+            min(float(np.min(fixed_lower)), float(np.min(fixed_local)), float(np.min(f(xs))))
+            - LOCAL_Y_PADDING_BELOW
+        )
+        y_max = min(
+            max(float(np.max(f(xs))), float(np.max(fixed_upper))) + LOCAL_Y_PADDING_ABOVE,
+            LOCAL_Y_MAX_CAP,
+        )
 
-        axes = _make_axes((-2.2, 1.72, 1), (y_min, y_max, 1), x_length=7.7, y_length=4.45)
+        axes = _make_axes(
+            (x_min, x_max, x_step),
+            (y_min, y_max, 1),
+            x_length=LOCAL_AXIS_X_LENGTH,
+            y_length=LOCAL_AXIS_Y_LENGTH,
+        )
         axes.set_opacity(0)
-        bottom_axis = Line(axes.c2p(-2.2, y_min), axes.c2p(1.72, y_min))
-        bottom_axis.set_stroke(C_MUTED, width=0.9, opacity=0.82)
-        true_curve = _smooth_curve(axes, xs, f, color=C_TEXT, width=3.2)
+        bottom_axis = Line(axes.c2p(x_min, y_min), axes.c2p(x_max, y_min))
+        bottom_axis.set_stroke(
+            C_MUTED,
+            width=LOCAL_BOTTOM_AXIS_STROKE_WIDTH,
+            opacity=LOCAL_BOTTOM_AXIS_OPACITY,
+        )
+        true_curve = _smooth_curve(axes, xs, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
         local_model = DashedVMobject(
             _smooth_curve(
                 axes,
                 xs,
                 lambda values: f_t + g_t * (values - x_t) + 0.5 * h_t * (values - x_t) ** 2,
                 color=C_PURPLE,
-                width=2.5,
+                width=LOCAL_MODEL_STROKE_WIDTH,
             ),
-            num_dashes=56,
+            num_dashes=LOCAL_MODEL_DASH_COUNT,
         )
         lower_model = always_redraw(
             lambda: _smooth_curve(
@@ -720,8 +931,8 @@ class SecondOrderApproximation(Slide):
                 xs,
                 lambda values: f_t + g_t * (values - x_t) + 0.5 * ~alpha * (values - x_t) ** 2,
                 color=C_BLUE,
-                width=2.0,
-                opacity=0.86,
+                width=LOCAL_BOUND_STROKE_WIDTH,
+                opacity=LOCAL_BOUND_OPACITY,
             )
         )
         upper_model = always_redraw(
@@ -730,45 +941,72 @@ class SecondOrderApproximation(Slide):
                 xs,
                 lambda values: f_t + g_t * (values - x_t) + 0.5 * ~beta * (values - x_t) ** 2,
                 color=C_ORANGE,
-                width=2.0,
-                opacity=0.86,
+                width=LOCAL_BOUND_STROKE_WIDTH,
+                opacity=LOCAL_BOUND_OPACITY,
             )
         )
-        x_t_dot = Dot(axes.c2p(x_t, f_t), color=C_TEXT, radius=0.07)
+        frame = _plot_frame(axes)
+        local_marker_radius = frame.height * SECOND_ORDER_MARKER_FRAME_HEIGHT_RATIO
+        x_t_dot = Dot(axes.c2p(x_t, f_t), color=C_TEXT, radius=local_marker_radius)
         newton_dot = Dot(
             axes.c2p(x_next, f_t + g_t * (x_next - x_t) + 0.5 * h_t * (x_next - x_t) ** 2),
             color=C_PURPLE,
-            radius=0.07,
+            radius=local_marker_radius,
         )
-        star_dot = Dot(axes.c2p(float(x_star), f_star), color=C_TEXT, radius=0.06)
+        star_dot = Dot(
+            axes.c2p(float(x_star), f_star),
+            color=C_TEXT,
+            radius=local_marker_radius * SECOND_ORDER_STAR_DOT_SCALE,
+        )
         x_t_tick = _bottom_tick(axes, x_t, r"x_t")
         next_tick = _bottom_tick(axes, x_next, r"x_{t+1}")
-        x_t_value = _data_label(axes, x_t - 0.17, f_t + 0.48, r"f(x_t)", font_size=23)
-        star_label = _data_label(axes, float(x_star) + 0.22, f_star - 0.23, r"f(x^\star)", font_size=23)
+        x_t_value = _data_label(
+            axes,
+            x_t + LOCAL_F_LABEL_OFFSET[0],
+            f_t + LOCAL_F_LABEL_OFFSET[1],
+            r"f(x_t)",
+        )
+        star_label = _data_label(
+            axes,
+            float(x_star) + LOCAL_STAR_LABEL_OFFSET[0],
+            f_star + LOCAL_STAR_LABEL_OFFSET[1],
+            r"f(x^\star)",
+        )
         x_line = DashedLine(axes.c2p(x_t, y_min), axes.c2p(x_t, y_max), color=C_MUTED)
-        x_line.set_stroke(width=0.8, opacity=0.65)
+        x_line.set_stroke(
+            width=LOCAL_VERTICAL_GUIDE_STROKE_WIDTH,
+            opacity=LOCAL_CURRENT_GUIDE_OPACITY,
+        )
         next_line = DashedLine(axes.c2p(x_next, y_min), axes.c2p(x_next, y_max), color=C_PURPLE)
-        next_line.set_stroke(width=0.8, opacity=0.62)
-        bracket_y = y_min + 0.03 * (y_max - y_min)
-        tick_height = 0.03 * (y_max - y_min)
+        next_line.set_stroke(
+            width=LOCAL_VERTICAL_GUIDE_STROKE_WIDTH,
+            opacity=LOCAL_NEXT_GUIDE_OPACITY,
+        )
+        bracket_y = y_min + LOCAL_BRACKET_Y_RATIO * (y_max - y_min)
+        tick_height = LOCAL_BRACKET_TICK_HEIGHT_RATIO * (y_max - y_min)
         delta_bracket = VGroup(
             Line(axes.c2p(x_t, bracket_y), axes.c2p(x_next, bracket_y)),
             Line(
-                axes.c2p(x_t, bracket_y - 0.45 * tick_height),
-                axes.c2p(x_t, bracket_y + 0.45 * tick_height),
+                axes.c2p(x_t, bracket_y - LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
+                axes.c2p(x_t, bracket_y + LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
             ),
             Line(
-                axes.c2p(x_next, bracket_y - 0.45 * tick_height),
-                axes.c2p(x_next, bracket_y + 0.45 * tick_height),
+                axes.c2p(x_next, bracket_y - LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
+                axes.c2p(x_next, bracket_y + LOCAL_BRACKET_HALF_TICK_SCALE * tick_height),
             ),
         )
-        delta_bracket.set_stroke(C_PURPLE, width=1.35, opacity=0.95)
-        delta_label = MathTex(
+        delta_bracket.set_stroke(C_PURPLE, width=LOCAL_BRACKET_STROKE_WIDTH)
+        delta_label = theme_math(
             r"\delta=-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
             color=C_PURPLE,
-            font_size=24,
+            typography="caption",
         )
-        delta_label.move_to(axes.c2p(0.5 * (x_t + x_next), bracket_y + 0.055 * (y_max - y_min)))
+        delta_label.move_to(
+            axes.c2p(
+                0.5 * (x_t + x_next),
+                bracket_y + LOCAL_BRACKET_LABEL_Y_RATIO * (y_max - y_min),
+            )
+        )
 
         def alpha_minimum() -> tuple[float, float]:
             value = max(~alpha, 1e-3)
@@ -782,13 +1020,21 @@ class SecondOrderApproximation(Slide):
             y_beta = f_t + g_t * (x_beta - x_t) + 0.5 * value * (x_beta - x_t) ** 2
             return float(x_beta), float(y_beta)
 
-        alpha_marker = always_redraw(lambda: _x_marker(axes, *alpha_minimum(), color=C_BLUE))
-        beta_marker = always_redraw(lambda: _x_marker(axes, *beta_minimum(), color=C_ORANGE))
-        frame = _plot_frame(axes)
-        frame.set_fill(C_PANEL_DEEP, opacity=0.22)
-        frame.set_stroke(C_FRAME, width=1.0, opacity=0.72)
+        x_marker_size = frame.height * X_MARKER_FRAME_HEIGHT_RATIO
+        alpha_marker = always_redraw(
+            lambda: _x_marker(axes, *alpha_minimum(), color=C_BLUE, size=x_marker_size)
+        )
+        beta_marker = always_redraw(
+            lambda: _x_marker(axes, *beta_minimum(), color=C_ORANGE, size=x_marker_size)
+        )
+        frame.set_fill(C_PANEL_DEEP, opacity=LOCAL_PANEL_FILL_OPACITY)
+        frame.set_stroke(
+            C_FRAME,
+            width=LOCAL_PANEL_STROKE_WIDTH,
+            opacity=LOCAL_PANEL_STROKE_OPACITY,
+        )
         plot_title = Caption("local quadratic interface")
-        plot_title.next_to(frame, UP, buff=0.12)
+        plot_title.next_to(frame, UP)
         accent = _accent_rule(frame, C_PURPLE)
         plot = VGroup(
             frame,
@@ -814,26 +1060,26 @@ class SecondOrderApproximation(Slide):
             plot_title,
             accent,
         )
-        left.scale_and_place(plot, buff=0.16)
+        left.scale_and_place(plot, buff=SMALL_BUFF)
 
-        taylor = MathTex(
+        taylor = theme_math(
             r"f(x_t+\delta)",
             r"\approx",
             r"f(x_t)+\nabla f(x_t)^\top\delta",
             r"+\frac12\delta^\top\nabla^2 f(x_t)\delta",
-            font_size=theme.typography.caption + 2,
+            typography="caption",
         )
-        solve = MathTex(
+        solve = theme_math(
             r"\nabla f(x_t)+\nabla^2f(x_t)\delta=0",
-            font_size=theme.typography.caption + 2,
+            typography="caption",
         )
-        update = MathTex(
+        update = theme_math(
             r"x_{t+1}=x_t-\nabla^2 f(x_t)^{-1}\nabla f(x_t)",
-            font_size=theme.typography.caption + 2,
+            typography="caption",
         )
-        envelope = MathTex(
+        envelope = theme_math(
             r"\alpha I\preceq \nabla^2 f(x)\preceq \beta I",
-            font_size=theme.typography.caption + 2,
+            typography="caption",
         )
         for mob in (taylor, solve, update, envelope):
             color_substrings(
@@ -847,9 +1093,9 @@ class SecondOrderApproximation(Slide):
                 },
             )
         readouts = VGroup(
-            VGroup(MathTex(r"\alpha=", color=C_BLUE, font_size=24), DN(alpha, num_decimal_places=2)).arrange(RIGHT),
-            VGroup(MathTex(r"\beta=", color=C_ORANGE, font_size=24), DN(beta, num_decimal_places=2)).arrange(RIGHT),
-        ).arrange(RIGHT, buff=0.35)
+            VGroup(theme_math(r"\alpha=", color=C_BLUE, typography="caption"), DN(alpha, num_decimal_places=2)).arrange(RIGHT),
+            VGroup(theme_math(r"\beta=", color=C_ORANGE, typography="caption"), DN(beta, num_decimal_places=2)).arrange(RIGHT),
+        ).arrange(RIGHT, buff=MED_SMALL_BUFF)
         sidebar = _formula_stack(
             Caption("local model"),
             taylor,
@@ -859,9 +1105,8 @@ class SecondOrderApproximation(Slide):
             Caption("curvature envelope"),
             envelope,
             readouts,
-            buff=0.22,
         )
-        right.scale_and_place(_themed_box(sidebar), buff=0.22)
+        right.scale_and_place(_themed_box(sidebar))
 
         self.play(
             Write(title),
@@ -881,9 +1126,13 @@ class SecondOrderApproximation(Slide):
         )
         self.fragment(title="Curvature envelope")
         self.play(Write(lower_model), Write(upper_model), FadeIn(alpha_marker, beta_marker), Write(envelope), FadeIn(readouts))
-        self.play(alpha @ 0.42, beta @ 4.2, run_time=2.0)
-        self.play(alpha @ 0.95, beta @ 2.35, run_time=2.0)
-        self.play(alpha @ 0.70, beta @ 3.00, run_time=1.4)
+        for alpha_value, beta_value, run_time in zip(
+            LOCAL_ALPHA_SWEEP_VALUES,
+            LOCAL_BETA_SWEEP_VALUES,
+            LOCAL_SWEEP_RUN_TIMES,
+            strict=True,
+        ):
+            self.play(alpha @ alpha_value, beta @ beta_value, run_time=run_time)
 
 
 class QuadraticRotation(Slide):
@@ -903,10 +1152,10 @@ class QuadraticRotation(Slide):
         original.add(
             _axis_arrow(original_axes, np.zeros(2), 3.25 * flat_vec, color=C_BLUE),
             _axis_arrow(original_axes, np.zeros(2), 1.75 * steep_vec, color=C_ORANGE),
-            MathTex(r"v_{\min}", color=C_BLUE, font_size=23).move_to(
+            theme_math(r"v_{\min}", color=C_BLUE, typography="caption").move_to(
                 original_axes.c2p(*(3.55 * flat_vec))
             ),
-            MathTex(r"v_{\max}", color=C_ORANGE, font_size=23).move_to(
+            theme_math(r"v_{\max}", color=C_ORANGE, typography="caption").move_to(
                 original_axes.c2p(*(2.05 * steep_vec))
             ),
         )
@@ -915,26 +1164,30 @@ class QuadraticRotation(Slide):
         eigenbasis.add(
             _axis_arrow(eigen_axes, np.zeros(2), np.array([3.25, 0.0]), color=C_BLUE),
             _axis_arrow(eigen_axes, np.zeros(2), np.array([0.0, 1.75]), color=C_ORANGE),
-            MathTex(r"v_{\min}", color=C_BLUE, font_size=23).move_to(eigen_axes.c2p(3.55, 0.22)),
-            MathTex(r"v_{\max}", color=C_ORANGE, font_size=23).move_to(eigen_axes.c2p(0.34, 2.05)),
+            theme_math(r"v_{\min}", color=C_BLUE, typography="caption").move_to(
+                eigen_axes.c2p(3.55, 0.22)
+            ),
+            theme_math(r"v_{\max}", color=C_ORANGE, typography="caption").move_to(
+                eigen_axes.c2p(0.34, 2.05)
+            ),
         )
         left.scale_and_place(original)
         right.scale_and_place(eigenbasis)
 
         map_label = VGroup(
-            MathTex(r"x\mapsto", color=C_PURPLE, font_size=25),
-            MathTex(r"V^\top(x-x^\star)", color=C_PURPLE, font_size=25),
-        ).arrange(DOWN, buff=0.04)
+            theme_math(r"x\mapsto", color=C_PURPLE, typography="caption"),
+            theme_math(r"V^\top(x-x^\star)", color=C_PURPLE, typography="caption"),
+        ).arrange(DOWN, buff=SMALL_BUFF)
         map_arrow = Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0)
-        map_group = VGroup(map_label, map_arrow).arrange(DOWN, buff=0.18)
-        mid.scale_and_place(map_group, buff=0.08)
+        map_group = VGroup(map_label, map_arrow).arrange(DOWN)
+        mid.scale_and_place(map_group, buff=SMALL_BUFF)
 
         equations = VGroup(
-            MathTex(r"f(x)=\frac12(x-x^\star)^\top A(x-x^\star)", font_size=30),
-            MathTex(r"V^\top A V=\operatorname{diag}(\alpha,\beta)", font_size=30),
-            MathTex(r"A v_i=\lambda_i v_i", font_size=30),
-            MathTex(r"x_0-x^\star=\sum_i \alpha_i v_i", font_size=30),
-        ).arrange(RIGHT, buff=0.42)
+            theme_math(r"f(x)=\frac12(x-x^\star)^\top A(x-x^\star)"),
+            theme_math(r"V^\top A V=\operatorname{diag}(\alpha,\beta)"),
+            theme_math(r"A v_i=\lambda_i v_i"),
+            theme_math(r"x_0-x^\star=\sum_i \alpha_i v_i"),
+        ).arrange(RIGHT, buff=MED_LARGE_BUFF)
         _color_text_parts(
             equations,
             {
@@ -945,7 +1198,7 @@ class QuadraticRotation(Slide):
                 r"\beta": C_ORANGE,
             },
         )
-        strip.scale_and_place(_themed_box(equations), buff=0.1)
+        strip.scale_and_place(_themed_box(equations), buff=SMALL_BUFF)
 
         self.play(Write(title), FadeIn(original))
         self.fragment(title="Rotate into modes")
@@ -974,13 +1227,16 @@ class GradientDescentModes(Slide):
         heatmap = _quadratic_heatmap(axes, matrix).set_z_index(LAYER_HEATMAP)
         contours = _quadratic_level_sets(axes, matrix, count=14).set_z_index(LAYER_CONTOUR)
         frame = _plot_frame(axes).set_z_index(LAYER_FRAME)
-        origin = Dot(axes.c2p(0, 0), color=C_TEXT, radius=0.055).set_z_index(LAYER_MARKERS)
-        origin_label = MathTex(r"x^\star", color=C_TEXT, font_size=24).next_to(origin, DOWN + RIGHT)
-        start = Dot(axes.c2p(6, 8), color=C_GREEN, radius=0.065).set_z_index(LAYER_MARKERS)
-        start_label = MathTex(r"x_0", color=C_GREEN, font_size=24).next_to(start, UP + RIGHT)
+        marker_radius = frame.height * PANEL_MARKER_FRAME_HEIGHT_RATIO
+        origin = Dot(axes.c2p(0, 0), color=C_TEXT, radius=marker_radius).set_z_index(LAYER_MARKERS)
+        origin_label = label_for_dot(r"x^\star", origin, direction=DR)
+        start = Dot(axes.c2p(6, 8), color=C_GREEN, radius=marker_radius).set_z_index(
+            LAYER_MARKERS
+        )
+        start_label = label_for_dot(r"x_0", start, color=C_GREEN, direction=UR)
         markers = VGroup(origin, origin_label, start, start_label)
         plot_shell = Group(heatmap, contours, axes, frame, markers)
-        top_left.scale_and_place(plot_shell, buff=0.08)
+        top_left.scale_and_place(plot_shell, buff=SMALL_BUFF)
 
         slider = _eta_slider(
             eta,
@@ -991,41 +1247,38 @@ class GradientDescentModes(Slide):
         trajectory = always_redraw(lambda: _mode_path(axes, ~eta).set_z_index(LAYER_TRAJECTORY))
 
         responses = _mode_response_stack(eta)
-        top_right.scale_and_place(responses, buff=0.1)
+        top_right.scale_and_place(responses, buff=SMALL_BUFF)
         responses.update()
 
-        rule = MathTex(
+        rule = theme_math(
             r"x_{t+1}-x^\star=\sum_i(1-\eta\lambda_i)^{t+1}\alpha_i v_i",
-            font_size=30,
         )
-        modes = MathTex(r"r_i=1-\eta\lambda_i", font_size=30)
-        energy = MathTex(
+        modes = theme_math(r"r_i=1-\eta\lambda_i")
+        energy = theme_math(
             r"f(x_t)-f_\star=\frac12\sum_i\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}",
-            font_size=30,
         )
         rho = VGroup(
-            MathTex(r"\rho_{\mathrm{GD}}(\eta)=\max\{|1-\eta\alpha|,\ |1-\eta\beta|\}=", font_size=28),
+            theme_math(r"\rho_{\mathrm{GD}}(\eta)=\max\{|1-\eta\alpha|,\ |1-\eta\beta|\}="),
             DN(
                 lambda: max(abs(1.0 - ~eta * MU), abs(1.0 - ~eta * LAMBDA_MAX)),
                 num_decimal_places=3,
-                font_size=25,
             ),
-        ).arrange(RIGHT, buff=0.08)
+        ).arrange(RIGHT, buff=SMALL_BUFF)
         factors = VGroup(
             VGroup(
-                MathTex(r"1-\eta\alpha=", color=C_BLUE, font_size=25),
-                DN(lambda: 1.0 - ~eta * MU, num_decimal_places=3, font_size=23),
-            ).arrange(RIGHT, buff=0.06),
+                theme_math(r"1-\eta\alpha=", color=C_BLUE, typography="caption"),
+                DN(lambda: 1.0 - ~eta * MU, num_decimal_places=3),
+            ).arrange(RIGHT, buff=SMALL_BUFF),
             VGroup(
-                MathTex(r"1-\eta\beta=", color=C_ORANGE, font_size=25),
-                DN(lambda: 1.0 - ~eta * LAMBDA_MAX, num_decimal_places=3, font_size=23),
-            ).arrange(RIGHT, buff=0.06),
-        ).arrange(RIGHT, buff=0.36)
+                theme_math(r"1-\eta\beta=", color=C_ORANGE, typography="caption"),
+                DN(lambda: 1.0 - ~eta * LAMBDA_MAX, num_decimal_places=3),
+            ).arrange(RIGHT, buff=SMALL_BUFF),
+        ).arrange(RIGHT, buff=MED_SMALL_BUFF)
         equations = VGroup(
-            VGroup(rule, modes).arrange(RIGHT, buff=0.55),
-            VGroup(energy, rho).arrange(RIGHT, buff=0.55),
+            VGroup(rule, modes).arrange(RIGHT, buff=MED_LARGE_BUFF),
+            VGroup(energy, rho).arrange(RIGHT, buff=MED_LARGE_BUFF),
             factors,
-        ).arrange(DOWN, buff=0.18)
+        ).arrange(DOWN)
         _color_text_parts(
             equations,
             {
@@ -1037,7 +1290,7 @@ class GradientDescentModes(Slide):
                 r"r_i": C_GREEN,
             },
         )
-        bottom.scale_and_place(_themed_box(equations), buff=0.12)
+        bottom.scale_and_place(_themed_box(equations), buff=SMALL_BUFF)
 
         self.play(
             Write(title),
@@ -1082,6 +1335,7 @@ class AdaGradKnownRuler(Slide):
                 y_length=3.85,
             )
             axes = panel[1]
+            frame = panel[0]
             gd = _linear_preconditioner_path(matrix, x0, np.eye(2), 102, eta_gd)
             diagonal = np.diag(np.diag(matrix))
             known = _linear_preconditioner_path(matrix, x0, np.linalg.inv(diagonal), 65)
@@ -1091,39 +1345,51 @@ class AdaGradKnownRuler(Slide):
                 _path_with_dots(axes, known, color=C_PURPLE, step=3),
                 _path_with_dots(axes, adagrad, color=C_TEAL, step=3),
             )
-            start = Dot(axes.c2p(float(x0[0]), float(x0[1])), color=C_GREEN, radius=0.06)
-            start_label = MathTex(r"x_0", color=C_GREEN, font_size=24).next_to(start, UR)
+            start = Dot(
+                axes.c2p(float(x0[0]), float(x0[1])),
+                color=C_GREEN,
+                radius=frame.height * PANEL_MARKER_FRAME_HEIGHT_RATIO,
+            )
+            start_label = label_for_dot(r"x_0", start, color=C_GREEN, direction=UR)
             method_key = VGroup(
                 VGroup(
-                    Dot(color=C_GREEN, radius=0.025),
-                    MathTex(
+                    Dot(color=C_GREEN),
+                    theme_math(
                         r"x_{t+1}=x_t-\eta\nabla f(x_t),\ \eta=\frac{1}{\alpha+\beta}",
                         color=C_TEXT,
-                        font_size=11,
+                        typography="caption",
                     ),
-                ).arrange(RIGHT, buff=0.07),
+                ).arrange(RIGHT, buff=SMALL_BUFF),
                 VGroup(
-                    Dot(color=C_PURPLE, radius=0.025),
-                    MathTex(r"x_{t+1}=x_t-\Lambda^{-1}\nabla f(x_t)", color=C_TEXT, font_size=11),
-                ).arrange(RIGHT, buff=0.07),
+                    Dot(color=C_PURPLE),
+                    theme_math(
+                        r"x_{t+1}=x_t-\Lambda^{-1}\nabla f(x_t)",
+                        color=C_TEXT,
+                        typography="caption",
+                    ),
+                ).arrange(RIGHT, buff=SMALL_BUFF),
                 VGroup(
-                    Dot(color=C_TEAL, radius=0.025),
-                    MathTex(r"x_{t+1}=x_t-D_t^{-1}\nabla f(x_t)", color=C_TEXT, font_size=11),
-                ).arrange(RIGHT, buff=0.07),
-            ).arrange(DOWN, aligned_edge=LEFT, buff=0.04)
+                    Dot(color=C_TEAL),
+                    theme_math(
+                        r"x_{t+1}=x_t-D_t^{-1}\nabla f(x_t)",
+                        color=C_TEXT,
+                        typography="caption",
+                    ),
+                ).arrange(RIGHT, buff=SMALL_BUFF),
+            ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
             method_key.move_to(axes.c2p(-2.10, 8.35), aligned_edge=UL)
             panel.add(paths, VGroup(start, start_label, method_key))
-            region.scale_and_place(panel, buff=0.08)
+            region.scale_and_place(panel, buff=SMALL_BUFF)
             panels.append(panel)
 
         legend = VGroup(
-            VGroup(Dot(color=C_GREEN), Caption(r"scalar GD")).arrange(RIGHT, buff=0.14),
-            VGroup(Dot(color=C_PURPLE), Caption(r"known diagonal inverse")).arrange(RIGHT, buff=0.14),
-            VGroup(Dot(color=C_TEAL), Caption(r"AdaGrad coordinate ruler")).arrange(RIGHT, buff=0.14),
-            MathTex(r"x_{t+1}=x_t-D_t^{-1}\nabla f(x_t)", font_size=28),
-        ).arrange(RIGHT, buff=0.52)
+            VGroup(Dot(color=C_GREEN), Caption(r"scalar GD")).arrange(RIGHT),
+            VGroup(Dot(color=C_PURPLE), Caption(r"known diagonal inverse")).arrange(RIGHT),
+            VGroup(Dot(color=C_TEAL), Caption(r"AdaGrad coordinate ruler")).arrange(RIGHT),
+            theme_math(r"x_{t+1}=x_t-D_t^{-1}\nabla f(x_t)"),
+        ).arrange(RIGHT, buff=MED_LARGE_BUFF)
         _color_text_parts(legend, {r"D_t": C_TEAL})
-        legend_region.scale_and_place(_themed_box(legend), buff=0.08)
+        legend_region.scale_and_place(_themed_box(legend), buff=SMALL_BUFF)
 
         self.play(Write(title), *(FadeIn(panel[:6], panel[7]) for panel in panels))
         self.fragment(title="Compare rulers")
@@ -1152,24 +1418,23 @@ class AdaGradDiagonalScaling(Slide):
             scaled = np.linalg.inv(np.sqrt(diagonal)) @ matrix @ np.linalg.inv(np.sqrt(diagonal))
             before = _quadratic_panel(matrix, f"{label} quadratic", x_length=4.0, y_length=2.65)
             after = _quadratic_panel(scaled, "after diagonal scaling", x_length=4.0, y_length=2.65)
-            before_region.scale_and_place(before, buff=0.08)
-            after_region.scale_and_place(after, buff=0.08)
+            before_region.scale_and_place(before, buff=SMALL_BUFF)
+            after_region.scale_and_place(after, buff=SMALL_BUFF)
             arrow = VGroup(
-                MathTex(r"x\mapsto", color=C_PURPLE, font_size=22),
-                MathTex(r"D_A^{-1/2}x", color=C_PURPLE, font_size=22),
+                theme_math(r"x\mapsto", color=C_PURPLE, typography="caption"),
+                theme_math(r"D_A^{-1/2}x", color=C_PURPLE, typography="caption"),
                 Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0),
-            ).arrange(DOWN, buff=0.06)
-            arrow_region.scale_and_place(arrow, buff=0.06)
+            ).arrange(DOWN, buff=SMALL_BUFF)
+            arrow_region.scale_and_place(arrow, buff=SMALL_BUFF)
             row_groups.append((before, arrow, after))
 
-        note = MathTex(
+        note = theme_math(
             r"D_A=\operatorname{diag}(A_{11},A_{22})",
             r"\qquad",
             r"D_A^{-1/2}AD_A^{-1/2}",
-            font_size=28,
         )
         color_substrings(note, {r"D_A": C_PURPLE})
-        note_region.scale_and_place(note, buff=0.08)
+        note_region.scale_and_place(note, buff=SMALL_BUFF)
 
         self.play(Write(title), *(FadeIn(before) for before, _, _ in row_groups))
         self.fragment(title="Apply diagonal map")
@@ -1187,11 +1452,11 @@ class AdaGradCoordinateResponse(Slide):
         specs = [
             ResponseSpec("GD: safe global step", "GD", 1.0 / LAMBDA_MAX),
             ResponseSpec("GD: balanced\ninverse-curvature step", "GD", 2.0 / (MU + LAMBDA_MAX)),
-            ResponseSpec("AdaGrad: activity counter", "AdaGrad", 0.15),
+            ResponseSpec("AdaGrad: activity counter", "AdaGrad", ADAGRAD_ACTIVITY_STEP_FRACTION),
         ]
 
         charts = []
-        adagrad_response = _adagrad_coordinate_response(0.15)
+        adagrad_response = _adagrad_coordinate_response(ADAGRAD_ACTIVITY_STEP_FRACTION)
         for region, spec in zip(columns, specs, strict=True):
             if spec.method == "GD":
                 top = np.abs(_gd_response(MU, spec.eta))
@@ -1213,12 +1478,12 @@ class AdaGradCoordinateResponse(Slide):
                 bottom = adagrad_response
                 top_note = (
                     rf"\begin{{aligned}}\eta_A&={spec.eta:.2f}\\"
-                    r"\text{first move}&=15\%\text{ of }|x_0|\\"
+                    rf"\text{{first move}}&={ADAGRAD_ACTIVITY_STEP_PERCENT}\%\text{{ of }}|x_0|\\"
                     rf"|g_0|&={MU:.2f}\end{{aligned}}"
                 )
                 bottom_note = (
                     rf"\begin{{aligned}}\eta_A&={spec.eta:.2f}\\"
-                    r"\text{first move}&=15\%\text{ of }|x_0|\\"
+                    rf"\text{{first move}}&={ADAGRAD_ACTIVITY_STEP_PERCENT}\%\text{{ of }}|x_0|\\"
                     rf"|g_0|&={LAMBDA_MAX:.2f}\end{{aligned}}"
                 )
                 top_callout = "same trace"
@@ -1232,24 +1497,23 @@ class AdaGradCoordinateResponse(Slide):
                 top_callout=top_callout,
                 bottom_callout=bottom_callout,
             )
-            region.scale_and_place(chart, buff=0.16)
+            region.scale_and_place(chart, buff=SMALL_BUFF)
             charts.append(chart)
 
         equations = _formula_stack(
             Caption("axis-aligned quadratic"),
-            MathTex(r"f(x)=\frac12\sum_i\lambda_i x_i^2", font_size=30),
+            theme_math(r"f(x)=\frac12\sum_i\lambda_i x_i^2"),
             Caption("AdaGrad accumulator"),
-            MathTex(r"G_{t,i}=\sum_{\tau=1}^{t}g_{\tau,i}^2", font_size=30),
-            MathTex(r"x_{t+1,i}=x_{t,i}-\eta\frac{g_{t,i}}{\sqrt{G_{t,i}}}", font_size=29),
+            theme_math(r"G_{t,i}=\sum_{\tau=1}^{t}g_{\tau,i}^2"),
+            theme_math(r"x_{t+1,i}=x_{t,i}-\eta\frac{g_{t,i}}{\sqrt{G_{t,i}}}"),
             Caption(r"because $g_{t,i}=\lambda_i x_{t,i}$"),
-            MathTex(
+            theme_math(
                 r"\frac{\lambda_i x_{t,i}}{\sqrt{\sum_\tau\lambda_i^2x_{\tau,i}^2}}"
                 r"=\frac{x_{t,i}}{\sqrt{\sum_\tau x_{\tau,i}^2}}",
-                font_size=27,
             ),
         )
         _color_text_parts(equations, {r"\lambda_i": C_ORANGE, r"G_{t,i}": C_TEAL, r"\eta": C_YELLOW})
-        equation_region.scale_and_place(_themed_box(equations), buff=0.18)
+        equation_region.scale_and_place(_themed_box(equations))
 
         self.play(Write(title))
         self.play(Write(charts[0]))
@@ -1278,25 +1542,24 @@ class AdaGradWeightedLedger(Slide):
 
         weighted = self._triangle_panel(weighted_points, "weighted coordinates", r"D_t")
         euclidean = self._triangle_panel(euclidean_points, "Euclidean coordinates", r"2")
-        left.scale_and_place(weighted, buff=0.08)
-        right.scale_and_place(euclidean, buff=0.08)
+        left.scale_and_place(weighted, buff=SMALL_BUFF)
+        right.scale_and_place(euclidean, buff=SMALL_BUFF)
 
         map_arrow = VGroup(
-            MathTex(r"x\mapsto", color=C_PURPLE, font_size=22),
-            MathTex(r"D_t^{-1/2}x", color=C_PURPLE, font_size=22),
+            theme_math(r"x\mapsto", color=C_PURPLE, typography="caption"),
+            theme_math(r"D_t^{-1/2}x", color=C_PURPLE, typography="caption"),
             Arrow(LEFT, RIGHT, color=C_PURPLE, buff=0),
-        ).arrange(DOWN, buff=0.06)
-        arrow_region.scale_and_place(map_arrow, buff=0.06)
+        ).arrange(DOWN, buff=SMALL_BUFF)
+        arrow_region.scale_and_place(map_arrow, buff=SMALL_BUFF)
 
         ledger_lines = VGroup(
-            MathTex(r"2\eta\langle g_t,x_t-x^\star\rangle", font_size=31),
-            MathTex(
+            theme_math(r"2\eta\langle g_t,x_t-x^\star\rangle"),
+            theme_math(
                 r"= \|x_t-x^\star\|_{D_t}^2-\|x_{t+1}-x^\star\|_{D_t}^2",
-                font_size=30,
             ),
-            MathTex(r"+ \|x_t-x_{t+1}\|_{D_t}^2", font_size=30),
-        ).arrange(DOWN, aligned_edge=LEFT, buff=0.1)
-        setup = MathTex(r"x_{t+1}=x_t-\eta D_t^{-1}g_t", font_size=31)
+            theme_math(r"+ \|x_t-x_{t+1}\|_{D_t}^2"),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
+        setup = theme_math(r"x_{t+1}=x_t-\eta D_t^{-1}g_t")
         for line in ledger_lines:
             line.set_color_by_tex(r"\eta", C_YELLOW)
             line.set_color_by_tex(r"D_t", C_PURPLE)
@@ -1304,11 +1567,10 @@ class AdaGradWeightedLedger(Slide):
         setup.set_color_by_tex(r"D_t", C_PURPLE)
         proof = _formula_stack(
             Caption("weighted parallelogram bookkeeping"),
-            VGroup(setup, ledger_lines).arrange(RIGHT, buff=0.7),
+            VGroup(setup, ledger_lines).arrange(RIGHT, buff=LEDGER_PROOF_COLUMN_BUFF),
             Caption("progress = distance drop + movement"),
-            buff=0.18,
         )
-        proof_region.scale_and_place(_themed_box(proof), buff=0.12)
+        proof_region.scale_and_place(_themed_box(proof), buff=SMALL_BUFF)
 
         self.play(Write(title), FadeIn(weighted))
         self.fragment(title="Change the ruler")
@@ -1382,20 +1644,20 @@ class AdaGradWeightedLedger(Slide):
             side: str,
             color: str,
             pos: float = 0.5,
-            distance: float = 0.17,
-            font_size: int = 16,
+            distance: float = LEDGER_LABEL_DISTANCE,
+            typography: str = "caption",
         ) -> MathTex:
             center = triangle_center()
             normal = side_normal(pa, pb, center)
             if side == "outer":
                 normal = -normal
             location = pa + pos * (pb - pa) + distance * normal
-            label = MathTex(text, color=color, font_size=font_size)
+            label = theme_math(text, color=color, typography=typography)
             label.move_to(axes.c2p(float(location[0]), float(location[1])))
             label.rotate(readable_angle(pa, pb))
             return label
 
-        def point_label(key: str, font_size: int) -> MathTex:
+        def point_label(key: str, typography: str) -> MathTex:
             center = triangle_center()
             point = points[key]
             direction = point - center
@@ -1403,8 +1665,8 @@ class AdaGradWeightedLedger(Slide):
             direction = (
                 np.array([0.0, -1.0], dtype=np.float64) if norm == 0 else direction / norm
             )
-            location = point + 0.38 * direction
-            return MathTex(labels[key], color=C_TEXT, font_size=font_size).move_to(
+            location = point + LEDGER_POINT_LABEL_DISTANCE * direction
+            return theme_math(labels[key], color=C_TEXT, typography=typography).move_to(
                 axes.c2p(float(location[0]), float(location[1]))
             )
 
@@ -1419,14 +1681,18 @@ class AdaGradWeightedLedger(Slide):
             color=C_MUTED,
         )
         step = _axis_arrow(axes, p_xt, p_xt1, color=C_RED)
+        frame = Rectangle(width=axes.width, height=axes.height)
+        frame.move_to(axes)
+        vertex_radius = frame.height * PANEL_MARKER_FRAME_HEIGHT_RATIO
         dots = VGroup(
-            *(
-                Dot(axes.c2p(float(point[0]), float(point[1])), color=C_TEXT, radius=0.055)
-                for point in points.values()
-            )
+            *(Dot(axes.c2p(float(point[0]), float(point[1])), color=C_TEXT, radius=vertex_radius) for point in points.values())
         )
-        label_size = 17 if norm_suffix == "D_t" else 20
-        point_labels = VGroup(point_label("star", label_size), point_label("xt", label_size), point_label("xt1", label_size))
+        label_typography = "caption"
+        point_labels = VGroup(
+            point_label("star", label_typography),
+            point_label("xt", label_typography),
+            point_label("xt1", label_typography),
+        )
         side_labels = VGroup(
             line_label(
                 p_xt,
@@ -1441,7 +1707,7 @@ class AdaGradWeightedLedger(Slide):
                 rf"\|x_{{t+1}}-x^\star\|_{{{norm_suffix}}}^2",
                 side="inner",
                 color=C_MUTED,
-                pos=0.52,
+                pos=LEDGER_NEW_DISTANCE_LABEL_POSITION,
             ),
             line_label(
                 p_xt,
@@ -1449,32 +1715,58 @@ class AdaGradWeightedLedger(Slide):
                 rf"\|x_{{t+1}}-x_t\|_{{{norm_suffix}}}^2",
                 side="inner",
                 color=C_RED,
-                pos=0.54,
+                pos=LEDGER_STEP_LABEL_POSITION,
             ),
         )
         extras = VGroup()
         if norm_suffix == "D_t":
             extras.add(
-                line_label(p_xt, p_star, r"A", side="outer", color=C_TEXT, distance=0.23, font_size=18),
-                line_label(p_xt, p_xt1, r"B", side="outer", color=C_TEXT, pos=0.47, distance=0.23, font_size=18),
-                line_label(p_xt1, p_star, r"A-B", side="outer", color=C_TEXT, distance=0.23, font_size=17),
+                line_label(
+                    p_xt,
+                    p_star,
+                    r"A",
+                    side="outer",
+                    color=C_TEXT,
+                    distance=LEDGER_LABEL_OUTER_DISTANCE,
+                ),
+                line_label(
+                    p_xt,
+                    p_xt1,
+                    r"B",
+                    side="outer",
+                    color=C_TEXT,
+                    pos=LEDGER_B_LABEL_POSITION,
+                    distance=LEDGER_LABEL_OUTER_DISTANCE,
+                ),
+                line_label(
+                    p_xt1,
+                    p_star,
+                    r"A-B",
+                    side="outer",
+                    color=C_TEXT,
+                    distance=LEDGER_LABEL_OUTER_DISTANCE,
+                ),
             )
             center = triangle_center()
             outer = -side_normal(p_xt, p_star, center)
-            brace_start = p_xt + 0.16 * (p_star - p_xt)
-            brace_end = p_xt + 0.42 * (p_star - p_xt)
+            brace_start = p_xt + LEDGER_P_PROJECTION_START * (p_star - p_xt)
+            brace_end = p_xt + LEDGER_P_PROJECTION_END * (p_star - p_xt)
             brace = BraceBetweenPoints(
                 axes.c2p(float(brace_start[0]), float(brace_start[1])),
                 axes.c2p(float(brace_end[0]), float(brace_end[1])),
                 direction=np.array([outer[0], outer[1], 0.0]),
                 color=C_PURPLE,
             )
-            p_point = p_xt + 0.40 * (p_star - p_xt)
-            open_point = Circle(radius=0.055, color=C_PURPLE).move_to(
+            p_point = p_xt + LEDGER_P_POINT_POSITION * (p_star - p_xt)
+            open_point = Circle(radius=vertex_radius, color=C_PURPLE).move_to(
                 axes.c2p(float(p_point[0]), float(p_point[1]))
             )
             open_point.set_fill(C_PANEL_DEEP, opacity=1.0)
-            p_label = MathTex(r"P", color=C_PURPLE, font_size=20).next_to(brace, LEFT, buff=0.08)
+            p_label = theme_math(r"P", color=C_PURPLE, typography="caption").next_to(
+                brace,
+                LEFT,
+                buff=SMALL_BUFF,
+            )
             extras.add(brace, p_label, open_point)
         else:
             extras.add(
@@ -1484,15 +1776,16 @@ class AdaGradWeightedLedger(Slide):
                     r"\eta\nabla f(x_t)",
                     side="outer",
                     color=C_RED,
-                    pos=0.35,
-                    distance=0.24,
-                    font_size=15,
+                    pos=LEDGER_EUCLIDEAN_STEP_LABEL_POSITION,
+                    distance=LEDGER_EUCLIDEAN_STEP_LABEL_DISTANCE,
                 )
             )
-        caption = Caption(title).next_to(axes, UP, buff=0.12)
-        frame = Rectangle(width=axes.width, height=axes.height)
-        frame.move_to(axes)
-        frame.set_stroke(C_FRAME, width=0.8, opacity=0.54)
+        caption = Caption(title).next_to(axes, UP)
+        frame.set_stroke(
+            C_FRAME,
+            width=LEDGER_FRAME_STROKE_WIDTH,
+            opacity=LEDGER_FRAME_STROKE_OPACITY,
+        )
         field = Group(heatmap, grid, levels)
         distances = VGroup(old_distance, new_distance, step, dots, point_labels, side_labels, extras)
         return Group(frame, axes, field, distances, caption, _accent_rule(frame, C_TEAL))

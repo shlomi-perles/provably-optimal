@@ -9,9 +9,13 @@ import numpy as np
 import numpy.typing as npt
 from manim import (
     DOWN,
+    DR,
     LEFT,
+    MED_LARGE_BUFF,
+    SMALL_BUFF,
     RIGHT,
     UP,
+    UR,
     Axes,
     Circle,
     Create,
@@ -53,6 +57,7 @@ from slides.style import (
     LAYER_HEATMAP,
     LAYER_MARKERS,
     LAYER_TRAJECTORY,
+    label_for_dot,
     segmented_panel,
 )
 
@@ -66,14 +71,47 @@ OPTIMUM = np.array([1.0, 1.0 / 3.0], dtype=np.float64)
 N_STEPS = 80
 ROSEN_Y_SCALE = 3.0
 ROSEN_CURVATURE = 20.0
+INITIAL_ALPHA = 0.0016
+INITIAL_BETA = 0.74
+ALPHA_SLIDER_RANGE = (0.0, 0.006)
+BETA_SLIDER_RANGE = (0.0, 0.99)
+ALPHA_DECIMALS = 4
+BETA_DECIMALS = 2
+ALPHA_SWEEP_VALUES = (0.004, INITIAL_ALPHA)
+BETA_SWEEP_VALUES = (0.9, 0.93, 0.2)
+PARAMETER_SWEEP_RUN_TIME = 2.4
 
 C_PATH = C_ORANGE
 C_ALPHA = C_PATH
 C_BETA = "#2F65C8"
 X_0_COLOR = C_YELLOW
-STEP_DOT_RADIUS = 0.018
-HEAD_DOT_RADIUS = 0.07
 MAX_POINT_NORM = 1e3
+PLOT_X_LENGTH = 12.4
+PLOT_Y_LENGTH = 3.35
+HEATMAP_WIDTH = 840
+HEATMAP_HEIGHT = 240
+ROSEN_CONTOUR_SAMPLES = 220
+ROSEN_LEVEL_COUNT = 18
+ROSEN_LEVEL_RANGE = (0.05, 2.05)
+ROSEN_CONTOUR_OPACITY_RANGE = (0.34, 0.72)
+ROSEN_CONTOUR_MAX_POINTS = 130
+ROSEN_CONTOUR_STROKE_WIDTH = 1.05
+ROSEN_MARKER_FRAME_HEIGHT_RATIO = 1 / 42
+OPTIMUM_HALO_DOT_SCALE = 2.5
+OPTIMUM_STROKE_WIDTH = 2.0
+OPTIMUM_STROKE_OPACITY = 0.95
+OPTIMUM_HALO_FILL_OPACITY = 0.16
+OPTIMUM_HALO_STROKE_WIDTH = 1.0
+OPTIMUM_HALO_STROKE_OPACITY = 0.35
+STEP_DOT_FRAME_HEIGHT_RATIO = 1 / 186
+START_DOT_SCALE = 1.35
+HEAD_DOT_FRAME_HEIGHT_RATIO = 1 / 48
+HEAD_DOT_SCALE = 2.0
+HEAD_RING_DOT_SCALE = 1.6
+TRAJECTORY_STROKE_WIDTH = 2.1
+TRAJECTORY_STROKE_OPACITY = 0.86
+HEAD_RING_STROKE_WIDTH = 2.0
+MOMENTUM_SLIDER_HALF_LENGTH = 1.05
 
 
 class MomentumRosenbrock(Slide):
@@ -88,8 +126,8 @@ class MomentumRosenbrock(Slide):
         self.region.place(title, UP)
         self.region.update(top=title)
 
-        alpha = VT(0.0016)
-        beta = VT(0.74)
+        alpha = VT(INITIAL_ALPHA)
+        beta = VT(INITIAL_BETA)
         axes = self._make_axes()
         heatmap = self._make_heatmap(axes).set_z_index(LAYER_HEATMAP)
         contours = self._make_contours(axes).set_z_index(LAYER_CONTOUR)
@@ -114,20 +152,13 @@ class MomentumRosenbrock(Slide):
         self.add_foreground_mobjects(markers)
         self.play(FadeIn(controls))
 
-        self.next_slide()
-        self.play(alpha @ 0.004, run_time=2.4)
+        for alpha_value in ALPHA_SWEEP_VALUES:
+            self.next_slide()
+            self.play(alpha @ alpha_value, run_time=PARAMETER_SWEEP_RUN_TIME)
 
-        self.next_slide()
-        self.play(alpha @ 0.0016, run_time=2.4)
-
-        self.next_slide()
-        self.play(beta @ 0.9, run_time=2.4)
-
-        self.next_slide()
-        self.play(beta @ 0.93, run_time=2.4)
-
-        self.next_slide()
-        self.play(beta @ 0.2, run_time=2.4)
+        for beta_value in BETA_SWEEP_VALUES:
+            self.next_slide()
+            self.play(beta @ beta_value, run_time=PARAMETER_SWEEP_RUN_TIME)
 
         self.clear_scene()
 
@@ -135,8 +166,8 @@ class MomentumRosenbrock(Slide):
         return Axes(
             x_range=[X_RANGE[0], X_RANGE[1], 1],
             y_range=[Y_RANGE[0], Y_RANGE[1], 1],
-            x_length=12.4,
-            y_length=3.35,
+            x_length=PLOT_X_LENGTH,
+            y_length=PLOT_Y_LENGTH,
             tips=False,
             axis_config={
                 "include_ticks": False,
@@ -145,7 +176,7 @@ class MomentumRosenbrock(Slide):
         )
 
     def _make_heatmap(self, axes: Axes) -> ImageMobject:
-        width, height = 840, 240
+        width, height = HEATMAP_WIDTH, HEATMAP_HEIGHT
         x_values = np.linspace(*X_RANGE, width)
         y_values = np.linspace(Y_RANGE[1], Y_RANGE[0], height)
         x_grid, y_grid = np.meshgrid(x_values, y_values)
@@ -158,42 +189,50 @@ class MomentumRosenbrock(Slide):
         return image
 
     def _make_contours(self, axes: Axes) -> VGroup:
-        x_values = np.linspace(*X_RANGE, 220)
-        y_values = np.linspace(*Y_RANGE, 220)
+        x_values = np.linspace(*X_RANGE, ROSEN_CONTOUR_SAMPLES)
+        y_values = np.linspace(*Y_RANGE, ROSEN_CONTOUR_SAMPLES)
         x_grid, y_grid = np.meshgrid(x_values, y_values)
         log_values = np.log10(self._banana_value(np.stack([x_grid, y_grid])) + 1.0)
         generator = contourpy.contour_generator(x=x_values, y=y_values, z=log_values)
-        levels = np.linspace(0.05, 2.05, 18)
+        levels = np.linspace(*ROSEN_LEVEL_RANGE, ROSEN_LEVEL_COUNT)
 
         contours = VGroup()
-        for opacity, level in zip(np.linspace(0.34, 0.72, len(levels)), levels, strict=True):
+        opacities = np.linspace(*ROSEN_CONTOUR_OPACITY_RANGE, len(levels))
+        for opacity, level in zip(opacities, levels, strict=True):
             for segment in generator.lines(float(level)):
                 if len(segment) < 2:
                     continue
                 line = VMobject()
                 line.set_points_as_corners(
-                    _sample_contour_points(axes, segment, max_points=130)
+                    _sample_contour_points(axes, segment, max_points=ROSEN_CONTOUR_MAX_POINTS)
                 )
-                line.set_stroke(C_CONTOUR, width=1.05, opacity=float(opacity))
+                line.set_stroke(
+                    C_CONTOUR,
+                    width=ROSEN_CONTOUR_STROKE_WIDTH,
+                    opacity=float(opacity),
+                )
                 contours.add(line)
         return contours
 
     def _make_static_markers(self, axes: Axes) -> VGroup:
-        start = Dot(_axes_point(axes, START), color=X_0_COLOR, radius=0.08)
-        optimum = Dot(_axes_point(axes, OPTIMUM), color=C_OPTIMUM, radius=0.08)
-        optimum.set_stroke(C_OPTIMUM_STROKE, width=2.0, opacity=0.95)
-        optimum_halo = Circle(radius=0.2, color=C_OPTIMUM)
-        optimum_halo.set_fill(C_OPTIMUM, opacity=0.16).set_stroke(
+        marker_radius = _plot_frame(axes).height * ROSEN_MARKER_FRAME_HEIGHT_RATIO
+        start = Dot(_axes_point(axes, START), color=X_0_COLOR, radius=marker_radius)
+        optimum = Dot(_axes_point(axes, OPTIMUM), color=C_OPTIMUM, radius=marker_radius)
+        optimum.set_stroke(
             C_OPTIMUM_STROKE,
-            width=1.0,
-            opacity=0.35,
+            width=OPTIMUM_STROKE_WIDTH,
+            opacity=OPTIMUM_STROKE_OPACITY,
+        )
+        optimum_halo = Circle(radius=marker_radius * OPTIMUM_HALO_DOT_SCALE, color=C_OPTIMUM)
+        optimum_halo.set_fill(C_OPTIMUM, opacity=OPTIMUM_HALO_FILL_OPACITY).set_stroke(
+            C_OPTIMUM_STROKE,
+            width=OPTIMUM_HALO_STROKE_WIDTH,
+            opacity=OPTIMUM_HALO_STROKE_OPACITY,
         )
         optimum_halo.move_to(optimum)
 
-        start_label = MathTex(r"x_0", color=X_0_COLOR, font_size=28)
-        start_label.next_to(start, UP + RIGHT, buff=0.12)
-        optimum_label = MathTex(r"x^\star", color=C_OPTIMUM, font_size=28)
-        optimum_label.next_to(optimum, DOWN + RIGHT, buff=0.12)
+        start_label = label_for_dot(r"x_0", start, color=X_0_COLOR, direction=UR)
+        optimum_label = label_for_dot(r"x^\star", optimum, color=C_OPTIMUM, direction=DR)
 
         return VGroup(start, optimum_halo, optimum, start_label, optimum_label)
 
@@ -215,16 +254,16 @@ class MomentumRosenbrock(Slide):
 
         alpha_slider = self._slider(
             alpha,
-            SliderSpec(r"\alpha", 0.0, 0.006, 4, C_ALPHA),
+            SliderSpec(r"\alpha", *ALPHA_SLIDER_RANGE, ALPHA_DECIMALS, C_ALPHA),
         )
         beta_slider = self._slider(
             beta,
-            SliderSpec(r"\beta", 0.0, 0.99, 2, C_BETA),
+            SliderSpec(r"\beta", *BETA_SLIDER_RANGE, BETA_DECIMALS, C_BETA),
         )
 
         readout = self._make_path_readout(alpha, beta)
-        sliders = VGroup(alpha_slider, beta_slider).arrange(RIGHT, buff=0.45)
-        controls = VGroup(equation, sliders, readout).arrange(RIGHT, buff=0.52)
+        sliders = VGroup(alpha_slider, beta_slider).arrange(RIGHT, buff=MED_LARGE_BUFF)
+        controls = VGroup(equation, sliders, readout).arrange(RIGHT, buff=MED_LARGE_BUFF)
         panel = self._panel(controls)
         return VGroup(panel, controls)
 
@@ -233,25 +272,28 @@ class MomentumRosenbrock(Slide):
         return ValueSlider(
             tracker,
             spec,
-            half_length=1.05,
+            half_length=MOMENTUM_SLIDER_HALF_LENGTH,
             label_font_size=theme.typography.body,
             value_font_size=theme.typography.caption,
         )
 
     def _make_trajectory(self, axes: Axes, alpha: VT, beta: VT) -> VGroup:
         points = self._momentum_points(~alpha, ~beta)
+        frame = _plot_frame(axes)
+        step_dot_radius = frame.height * STEP_DOT_FRAME_HEIGHT_RATIO
+        head_dot_radius = frame.height * HEAD_DOT_FRAME_HEIGHT_RATIO
         dots = VGroup(
             *(
                 Dot(
                     _axes_point(axes, point),
                     color=C_PATH,
-                    radius=STEP_DOT_RADIUS,
+                    radius=step_dot_radius,
                 )
                 for point in points
             )
         )
-        dots[0].set_color(X_0_COLOR).scale(1.35)
-        dots[-1].scale(2.0)
+        dots[0].set_color(X_0_COLOR).scale(START_DOT_SCALE)
+        dots[-1].scale(HEAD_DOT_SCALE)
 
         self._attach_start_updater(dots[0], axes)
         for previous, dot in pairwise(dots):
@@ -260,14 +302,18 @@ class MomentumRosenbrock(Slide):
         connectors = VGroup()
         for start, end in pairwise(dots):
             connector = Line(start.get_center(), end.get_center())
-            connector.set_stroke(C_PATH, width=2.1, opacity=0.86)
+            connector.set_stroke(
+                C_PATH,
+                width=TRAJECTORY_STROKE_WIDTH,
+                opacity=TRAJECTORY_STROKE_OPACITY,
+            )
             connector.add_updater(
                 lambda mob, start=start, end=end: self._update_connector(mob, start, end)
             )
             connectors.add(connector)
 
-        head_ring = Circle(radius=0.11, color=C_PATH)
-        head_ring.set_stroke(C_PATH, width=2.0)
+        head_ring = Circle(radius=head_dot_radius * HEAD_RING_DOT_SCALE, color=C_PATH)
+        head_ring.set_stroke(C_PATH, width=HEAD_RING_STROKE_WIDTH)
         head_ring.add_updater(lambda mob: mob.move_to(dots[-1]))
 
         return VGroup(dots, connectors, head_ring)
@@ -285,12 +331,12 @@ class MomentumRosenbrock(Slide):
             font_size=theme.typography.caption,
         )
 
-        step_row = VGroup(Caption("steps"), steps).arrange(RIGHT, buff=0.18)
+        step_row = VGroup(Caption("steps"), steps).arrange(RIGHT, buff=SMALL_BUFF)
         distance_row = VGroup(Caption(r"$\|x_t-x^\star\|$"), distance).arrange(
             RIGHT,
-            buff=0.18,
+            buff=SMALL_BUFF,
         )
-        readout = VGroup(step_row, distance_row).arrange(DOWN, buff=0.12, aligned_edge=LEFT)
+        readout = VGroup(step_row, distance_row).arrange(DOWN, buff=SMALL_BUFF, aligned_edge=LEFT)
         readout.set_color(C_MUTED)
         return readout
 
@@ -406,7 +452,11 @@ class MomentumRosenbrock(Slide):
             return
 
         connector.set_points_as_corners([start.get_center(), end.get_center()])
-        connector.set_stroke(C_PATH, width=2.1, opacity=0.86)
+        connector.set_stroke(
+            C_PATH,
+            width=TRAJECTORY_STROKE_WIDTH,
+            opacity=TRAJECTORY_STROKE_OPACITY,
+        )
 
     def _inside_plot(self, point: FloatArray) -> bool:
         return (
