@@ -20,8 +20,6 @@ class SecondOrderApproximation(Slide):
         title = _start_slide(self, "Second-order approximation")
         left, right = _split_weighted(self.region, [1.72, 1.0])
 
-        alpha = VT(LOCAL_ALPHA_INITIAL)
-        beta = VT(LOCAL_ALPHA_INITIAL)
         alpha_anchor = VT(LOCAL_CURRENT_X)
         beta_anchor = VT(LOCAL_CURRENT_X)
         view_scale = VT(1.0)
@@ -71,43 +69,79 @@ class SecondOrderApproximation(Slide):
         f_star = float(f(np.array([x_star]))[0])
         x_min, x_max, x_step = LOCAL_X_RANGE
         base_x_span = x_max - x_min
-        zoom_out_scale = 2.0
         anchor_sweep_x = float(x_star + 2 * abs(x_star - x_t))
         zoom_anchor_x = float(x_star)
         zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
+        zoom_padding = x_step / 2
+        zoom_out_scale = max(
+            1.0,
+            (anchor_sweep_x + zoom_padding - zoom_anchor_x)
+            / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
+            (zoom_anchor_x - min(x_min, x_t) + zoom_padding)
+            / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
+        )
         zoom_x_span = base_x_span * zoom_out_scale
         zoom_x_min = zoom_anchor_x - zoom_anchor_x_ratio * zoom_x_span
         zoom_x_max = zoom_x_min + zoom_x_span
-        beta_domain = np.linspace(
+        curvature_domain = np.linspace(
             min(x_min, zoom_x_min, x_t, anchor_sweep_x),
             max(x_max, zoom_x_max, x_t, anchor_sweep_x),
             LOCAL_CURVE_SAMPLES,
         )
-        beta_anchor_values = np.linspace(
-            min(x_t, anchor_sweep_x),
-            max(x_t, anchor_sweep_x),
-            max(2, LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT),
+        sweep_endpoints = (x_t, anchor_sweep_x)
+        curvature_anchor_count = max(
+            len(sweep_endpoints),
+            LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT,
+        )
+        curvature_anchor_values = np.linspace(
+            min(sweep_endpoints),
+            max(sweep_endpoints),
+            curvature_anchor_count,
         )
 
-        def beta_bound_for_anchor(anchor: float) -> float:
-            deltas = beta_domain - anchor
+        def curvature_bounds_for_anchor(anchor: float) -> tuple[float, float]:
+            deltas = curvature_domain - anchor
             mask = np.abs(deltas) > ZERO_AXIS_EPSILON
             required_curvatures = (
                 2
-                * (f(beta_domain[mask]) - f_scalar(anchor) - grad(anchor) * deltas[mask])
+                * (
+                    f(curvature_domain[mask])
+                    - f_scalar(anchor)
+                    - grad(anchor) * deltas[mask]
+                )
                 / deltas[mask] ** 2
             )
-            return max(hess(anchor), float(np.max(required_curvatures)))
+            return (
+                min(hess(anchor), float(np.min(required_curvatures))),
+                max(hess(anchor), float(np.max(required_curvatures))),
+            )
 
-        beta_target = float(
-            max(
-                LOCAL_BETA_INITIAL,
-                max(beta_bound_for_anchor(anchor) for anchor in beta_anchor_values),
+        hessian_domain_min = min(
+            float(curvature_domain[0]),
+            float(curvature_domain[-1]),
+        )
+        hessian_domain_max = max(
+            float(curvature_domain[0]),
+            float(curvature_domain[-1]),
+        )
+        hessian_candidates = [hessian_domain_min, hessian_domain_max]
+        if hessian_domain_min <= center <= hessian_domain_max:
+            hessian_candidates.append(center)
+        curvature_bounds = [
+            curvature_bounds_for_anchor(anchor) for anchor in curvature_anchor_values
+        ]
+        alpha_target = float(
+            min(
+                min(lower_bound for lower_bound, _ in curvature_bounds),
+                min(hess(candidate) for candidate in hessian_candidates),
             )
         )
+        beta_target = float(max(upper_bound for _, upper_bound in curvature_bounds))
+        alpha = VT(alpha_target)
+        beta = VT(beta_target)
         xs = np.linspace(x_min, x_max, LOCAL_CURVE_SAMPLES)
         dx = xs - x_t
-        fixed_lower = f_t + g_t * dx + 0.5 * LOCAL_ALPHA_INITIAL * dx**2
+        fixed_lower = f_t + g_t * dx + 0.5 * alpha_target * dx**2
         fixed_upper = f_t + g_t * dx + 0.5 * beta_target * dx**2
         fixed_local = f_t + g_t * dx + 0.5 * h_t * dx**2
         y_min = (
@@ -529,14 +563,14 @@ class SecondOrderApproximation(Slide):
             mob.add_updater(update_delta_label)
 
         def alpha_minimum() -> tuple[float, float]:
-            value = max(~alpha, 1e-3)
+            value = max(float(~alpha), ZERO_AXIS_EPSILON)
             anchor = float(~alpha_anchor)
             x_alpha = anchor - grad(anchor) / value
             y_alpha = float(model_values(np.array([x_alpha]), anchor, value)[0])
             return float(x_alpha), float(y_alpha)
 
         def beta_minimum() -> tuple[float, float]:
-            value = max(~beta, 1e-3)
+            value = max(float(~beta), ZERO_AXIS_EPSILON)
             anchor = float(~beta_anchor)
             x_beta = anchor - grad(anchor) / value
             y_beta = float(model_values(np.array([x_beta]), anchor, value)[0])
@@ -794,17 +828,6 @@ class SecondOrderApproximation(Slide):
         self.play(Write(upper_model), Write(beta_marker))
         self.next_slide()
 
-        track_curve(
-            upper_model,
-            upper_model_values,
-            color=C_ORANGE,
-            width=LOCAL_BOUND_STROKE_WIDTH,
-            opacity=LOCAL_BOUND_OPACITY,
-        )
-        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
-        self.play(beta @ beta_target)
-        for mob in (upper_model, beta_marker):
-            mob.clear_updaters()
         self.play(
             Write(beta_definition),
             grow_legend_background(4),
