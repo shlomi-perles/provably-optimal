@@ -160,6 +160,8 @@ MODE_CHART_BASELINE_OPACITY = 0.76
 MODE_CHART_EPSILON = 0.1
 MODE_CHART_EPSILON_STROKE_WIDTH = 0.65
 MODE_CHART_EPSILON_OPACITY = 0.52
+MODE_CHART_EPSILON_CROSSING_STROKE_WIDTH = 0.82
+MODE_CHART_EPSILON_CROSSING_OPACITY = 0.82
 MODE_CHART_BAR_WIDTH_FRACTION = 0.62
 MODE_CHART_BAR_MIN_HEIGHT_RATIO = 1 / 200
 MODE_CHART_BAR_PLACEHOLDER_RATIO = 1 / 100
@@ -717,6 +719,58 @@ def _eta_slider(tracker: VT, spec: SliderSpec, eigenvalues: FloatArray) -> VGrou
     )
 
 
+def _mode_response_values(
+    *,
+    lambda_i: float,
+    coefficient: float,
+    eta: float,
+    response_steps: FloatArray,
+) -> FloatArray:
+    factor = abs(1.0 - eta * lambda_i)
+    return coefficient**2 * factor ** (2 * (response_steps + 1))
+
+
+def _mode_response_value(
+    *,
+    lambda_i: float,
+    coefficient: float,
+    eta: float,
+    response_step: float,
+) -> float:
+    factor = abs(1.0 - eta * lambda_i)
+    return float(coefficient**2 * factor ** (2 * (response_step + 1)))
+
+
+def _mode_epsilon_crossing_index(
+    *,
+    lambda_i: float,
+    coefficient: float,
+    eta: float,
+    response_steps: FloatArray,
+) -> int | None:
+    values = _mode_response_values(
+        lambda_i=lambda_i,
+        coefficient=coefficient,
+        eta=eta,
+        response_steps=response_steps,
+    )
+    crossings = np.flatnonzero(values < MODE_CHART_EPSILON)
+    if len(crossings) == 0:
+        return None
+    return int(crossings[0])
+
+
+def _mode_chart_sample_x(frame: Rectangle, sample_index: int, sample_count: int) -> float:
+    return float(frame.get_left()[0] + frame.width * (sample_index + 0.5) / sample_count)
+
+
+def _mode_bar_height(frame: Rectangle, value: float, y_max: float) -> float:
+    return max(
+        frame.height * min(value / y_max, 1.0),
+        frame.height * MODE_CHART_BAR_MIN_HEIGHT_RATIO,
+    )
+
+
 def _mode_magnitude_chart(
     eta: VT,
     lambda_i: float,
@@ -730,7 +784,7 @@ def _mode_magnitude_chart(
     show_x_label: bool,
 ) -> VGroup:
     y_max = MODE_CHART_Y_STEP * np.ceil(
-        max(MODE_CHART_MIN_Y_MAX, abs(coefficient) * MODE_CHART_HEADROOM) / MODE_CHART_Y_STEP
+        max(MODE_CHART_MIN_Y_MAX, coefficient**2 * MODE_CHART_HEADROOM) / MODE_CHART_Y_STEP
     )
     frame = Rectangle(width=width, height=height)
     frame.set_stroke(
@@ -757,40 +811,77 @@ def _mode_magnitude_chart(
     epsilon_label = theme_math(r"\epsilon", color=C_MUTED, typography="caption")
     epsilon_label.next_to(epsilon_line, RIGHT, buff=SMALL_BUFF)
 
-    iterations = np.arange(MODE_CHART_STEP_STRIDE, RESPONSE_STEP_COUNT + 1, MODE_CHART_STEP_STRIDE)
+    response_steps = np.arange(0, RESPONSE_STEP_COUNT + 1, MODE_CHART_STEP_STRIDE)
     bars = VGroup()
-    for index, iteration in enumerate(iterations):
-        bar = Rectangle(
-            width=frame.width * MODE_CHART_BAR_PLACEHOLDER_RATIO,
-            height=frame.height * MODE_CHART_BAR_PLACEHOLDER_RATIO,
+    for index, response_step in enumerate(response_steps):
+        bar_width = frame.width / len(response_steps) * MODE_CHART_BAR_WIDTH_FRACTION
+        x = _mode_chart_sample_x(frame, index, len(response_steps))
+        initial_value = _mode_response_value(
+            lambda_i=lambda_i,
+            coefficient=coefficient,
+            eta=~eta,
+            response_step=float(response_step),
         )
+        initial_height = _mode_bar_height(frame, initial_value, y_max)
+        bar = Rectangle(
+            width=bar_width,
+            height=initial_height,
+        )
+        bar.set_fill(color, opacity=MODE_CHART_BAR_OPACITY)
+        bar.set_stroke(color, opacity=0)
+        bar.move_to([x, frame.get_bottom()[1] + initial_height / 2, frame.get_center()[2]])
 
         def update_bar(
             mob: Rectangle,
             *,
-            iteration: int = int(iteration),
-            index: int = index,
+            response_step: int = int(response_step),
+            x: float = x,
         ) -> None:
-            response = (1.0 - ~eta * lambda_i) ** iteration
-            value = float(coefficient * response)
-            bar_width = frame.width / len(iterations) * MODE_CHART_BAR_WIDTH_FRACTION
-            bar_height = max(
-                frame.height * min(value / y_max, 1.0),
-                frame.height * MODE_CHART_BAR_MIN_HEIGHT_RATIO,
+            value = _mode_response_value(
+                lambda_i=lambda_i,
+                coefficient=coefficient,
+                eta=~eta,
+                response_step=response_step,
             )
-            x = frame.get_left()[0] + frame.width * (index + 0.5) / len(iterations)
-            y = frame.get_bottom()[1] + bar_height / 2
-            replacement = Rectangle(width=bar_width, height=bar_height)
-            replacement.set_fill(color, opacity=MODE_CHART_BAR_OPACITY)
-            replacement.set_stroke(color, opacity=0)
-            replacement.move_to([x, y, frame.get_center()[2]])
-            mob.become(replacement)
+            bar_height = _mode_bar_height(frame, value, y_max)
+            mob.stretch_to_fit_height(bar_height)
+            mob.move_to([x, frame.get_bottom()[1] + bar_height / 2, frame.get_center()[2]])
 
         bar.add_updater(update_bar)
         bars.add(bar)
 
+    epsilon_crossing = Line(frame.get_bottom(), frame.get_top())
+    epsilon_crossing.set_stroke(
+        C_MUTED,
+        width=MODE_CHART_EPSILON_CROSSING_STROKE_WIDTH,
+        opacity=MODE_CHART_EPSILON_CROSSING_OPACITY,
+    )
+    epsilon_crossing.mode_crossing_visible = True
+
+    def update_epsilon_crossing(mob: Line) -> None:
+        crossing_index = _mode_epsilon_crossing_index(
+            lambda_i=lambda_i,
+            coefficient=coefficient,
+            eta=~eta,
+            response_steps=response_steps,
+        )
+        if crossing_index is None:
+            if mob.mode_crossing_visible:
+                mob.set_opacity(0)
+                mob.mode_crossing_visible = False
+            return
+
+        x = _mode_chart_sample_x(frame, crossing_index, len(response_steps))
+        if not mob.mode_crossing_visible:
+            mob.set_opacity(MODE_CHART_EPSILON_CROSSING_OPACITY)
+            mob.mode_crossing_visible = True
+        mob.move_to([x, frame.get_center()[1], frame.get_center()[2]])
+
+    update_epsilon_crossing(epsilon_crossing)
+    epsilon_crossing.add_updater(update_epsilon_crossing)
+
     y_label = theme_math(
-        rf"(1-\eta\lambda_{mode_index})^{{t+1}}\alpha_{mode_index}v_{mode_index}",
+        rf"\|(1-\eta\lambda_{mode_index})^{{t+1}}\alpha_{mode_index}v_{mode_index}\|_2^2",
         color=C_TEXT,
         typography="caption",
     )
@@ -804,14 +895,25 @@ def _mode_magnitude_chart(
         DN(lambda: 1.0 - ~eta * lambda_i, num_decimal_places=3),
     ).arrange(RIGHT, buff=SMALL_BUFF)
     r_readout.move_to(frame.get_corner(UR) + MODE_CHART_READOUT_OFFSET)
-    x_label = Caption(r"even iteration $t+1$") if show_x_label else VGroup()
+    x_label = Caption(r"even iteration $t$") if show_x_label else VGroup()
     if show_x_label:
         x_label.next_to(frame, DOWN)
-    return VGroup(frame, baseline, epsilon_line, epsilon_label, bars, y_label, tag, r_readout, x_label)
+    return VGroup(
+        frame,
+        baseline,
+        epsilon_line,
+        epsilon_crossing,
+        epsilon_label,
+        bars,
+        y_label,
+        tag,
+        r_readout,
+        x_label,
+    )
 
 
 def _mode_response_stack(eta: VT, *, width: float = 3.1, height: float = 1.08) -> VGroup:
-    title = Caption("mode magnitudes")
+    title = Caption("squared mode magnitudes")
     matrix, _ = _rotated_quadratic_matrix()
     eigenvalues, eigvecs = _quadratic_eigendecomposition(matrix)
     coefficients = eigvecs.T @ MODE_INITIAL_POINT

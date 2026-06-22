@@ -233,7 +233,7 @@ def label_for_dot(
     label = MathTex(tex, color=color)
     scale_to_fit_mobject(label, dot, scaleback=scale)
     direction_vector = list(direction)
-    label.next_to(dot.get_boundary_point(direction_vector), direction_vector, buff=buff)
+    label.next_to(dot, direction_vector, buff=buff)
     return label
 
 

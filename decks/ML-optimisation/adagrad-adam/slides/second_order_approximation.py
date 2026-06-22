@@ -482,6 +482,23 @@ class SecondOrderApproximation(Slide):
         plot_legend_background = legend_background_for(1)
         plot_legend.set_z_index(LAYER_MARKERS + 1)
         plot.add(plot_legend_background, plot_legend)
+        tracked_mobjects = (
+            x_t_dot,
+            newton_dot,
+            star_dot,
+            x_t_tick,
+            next_tick,
+            x_t_value,
+            star_label,
+            x_line,
+            next_line,
+            delta_bracket,
+            delta_label,
+            alpha_marker,
+            beta_marker,
+        )
+        for mob in tracked_mobjects:
+            mob.suspend_updating()
 
         definition_template = TexTemplate()
         definition_template.add_to_preamble(r"\usepackage{amsthm}")
@@ -546,6 +563,8 @@ class SecondOrderApproximation(Slide):
             Write(x_t_value),
             Write(f_legend),
         )
+        for mob in (x_t_dot, x_t_tick, x_t_value):
+            mob.resume_updating()
         track_with_factory(true_curve, true_curve_factory)
         self.next_slide()
 
@@ -562,6 +581,17 @@ class SecondOrderApproximation(Slide):
             plot_legend_background.animate.become(legend_background_for(2)),
             Write(hessian_legend),
         )
+        for mob in (
+            newton_dot,
+            star_dot,
+            next_tick,
+            star_label,
+            x_line,
+            next_line,
+            delta_bracket,
+            delta_label,
+        ):
+            mob.resume_updating()
         track_with_factory(local_model, local_model_factory)
         self.next_slide()
 
@@ -572,10 +602,12 @@ class SecondOrderApproximation(Slide):
             plot_legend_background.animate.become(legend_background_for(3)),
             Write(alpha_legend),
         )
+        alpha_marker.resume_updating()
         track_with_factory(lower_model, lower_model_factory)
         self.next_slide()
 
         self.play(Write(upper_model), Write(beta_marker))
+        beta_marker.resume_updating()
         track_with_factory(upper_model, upper_model_factory)
         self.next_slide()
 
