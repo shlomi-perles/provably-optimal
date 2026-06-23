@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from manim import SurroundingRectangle, Transform
+from manim import SurroundingRectangle, Unwrite, VGroup
 
 from slides.helpers.figure_helpers import *
 from slides.helpers.reminders import ReminderStack
-from slides.helpers.style import C_PANEL_SOFT, PANEL_CORNER_RADIUS, PANEL_STROKE_WIDTH
+from slides.helpers.second_order import FORMULA_COLORS
+from slides.helpers.style import PANEL_CORNER_RADIUS, PANEL_STROKE_WIDTH
 
 
 class GradientDescentModes(Slide):
@@ -16,7 +17,7 @@ class GradientDescentModes(Slide):
         title = _start_slide(self, "Gradient descent is a scalar compromise")
         self.region.update(left=title.get_left(), right=title.get_right())
         intro_region, proof_region = _split_rows(self.region, [1, 5])
-        function_region, reminder_region = _split_rows(intro_region, [1, 1])
+        function_region, _ = _split_rows(intro_region, [1, 1])
         top, bottom = _split_rows(self.region, [3, 4])
         equations_region, mode_factor_region = _split_weighted(top, [3, 2])
         figure_region, response_region = _split_weighted(bottom, [2, 3])
@@ -32,9 +33,9 @@ class GradientDescentModes(Slide):
 
         color_map = {
             r"\lambda": C_ORANGE,
+            r"\lambda_i": C_ORANGE,
             r"\lambda_{\min}": C_BLUE,
             r"\lambda_{\max}": C_ORANGE,
-            r"\lambda_i": C_ORANGE,
             r"\eta": C_ETA,
             r"\alpha_i": C_GREEN,
             r"\alpha": C_BLUE,
@@ -42,20 +43,16 @@ class GradientDescentModes(Slide):
             r"\rho": C_GREEN,
             r"\kappa": C_PURPLE,
             r"\epsilon": C_YELLOW,
-            r"x_t": C_YELLOW,
+            r"x_t": FORMULA_COLORS[r"x_t"],
+            r"x_{t+1}": FORMULA_COLORS[r"x_{t+1}"],
             r"x_0": C_YELLOW,
-            r"A": C_ORANGE,
         }
 
         function_definition = theme_math(
             r"f(x)=\frac{1}{2}(x-x^\star)^\top A(x-x^\star)",
         )
         _color_text_parts(function_definition, color_map)
-        function_region.scale_and_place(
-            function_definition,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
+        function_region.place(function_definition, UP)
 
         gd_update = theme_math(
             r"x_{t+1}=x_t-\eta\nabla f(x_t)",
@@ -69,17 +66,9 @@ class GradientDescentModes(Slide):
         _color_text_parts(inverse_hessian_note, color_map)
         reminders = ReminderStack(
             [gd_update, inverse_hessian_note],
-            width=reminder_region.width - 2 * SMALL_BUFF,
-            max_height=reminder_region.height,
-            corner=None,
             orientation="horizontal",
-            fill_color=C_PANEL_SOFT,
         )
-        reminder_region.scale_and_place(
-            reminders,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
+        reminder_parts = VGroup(reminders.frame, reminders.dividers, *reminders.entries)
 
         derivation_page = TexPage(
             r"\["
@@ -109,16 +98,10 @@ class GradientDescentModes(Slide):
             r"\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}"
             r"\end{aligned}"
             r"\]",
-            page_width=proof_region,
-            buff=SMALL_BUFF,
-            font_size=get_active_theme().typography.caption,
+            page_width=self.region,
         )
         color_substrings(derivation_page, color_map, probe_class=MathTex)
-        proof_region.scale_and_place(
-            derivation_page,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
+        proof_region.scale_and_place(derivation_page)
         eq_gd_mode_sum = derivation_page.equation(3)
         gd_mode_sum_frame = SurroundingRectangle(
             eq_gd_mode_sum,
@@ -183,10 +166,9 @@ class GradientDescentModes(Slide):
         equations_region.scale_and_place(
             compact_mode_sum,
             buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
         )
 
-        self.play(Write(title), Write(function_definition), FadeIn(reminders))
+        self.play(Write(title), Write(function_definition), Write(reminder_parts))
         self.next_slide()
 
         self.play(Write(derivation_page.equation(0)))
@@ -203,24 +185,25 @@ class GradientDescentModes(Slide):
         self.next_slide()
 
         self.play(
-            FadeOut(function_definition),
-            FadeOut(reminders),
-            FadeOut(derivation_page.equation(0)),
-            FadeOut(derivation_page.line(0)),
-            FadeOut(derivation_page.equation(1)),
-            FadeOut(derivation_page.line(1)),
-            FadeOut(derivation_page.equation(2)),
-            FadeOut(derivation_page.line(2)),
-            FadeOut(gd_mode_sum_frame),
-            Transform(eq_gd_mode_sum, compact_mode_sum),
+            Unwrite(function_definition),
+            Unwrite(reminder_parts),
+            Unwrite(derivation_page.equation(0)),
+            Unwrite(derivation_page.line(0)),
+            Unwrite(derivation_page.equation(1)),
+            Unwrite(derivation_page.line(1)),
+            Unwrite(derivation_page.equation(2)),
+            Unwrite(derivation_page.line(2)),
+            Unwrite(eq_gd_mode_sum),
+            Unwrite(gd_mode_sum_frame),
+            Write(compact_mode_sum),
             FadeIn(heatmap),
             Write(contours),
             Write(frame),
-            FadeIn(markers),
+            Write(markers),
             Write(trajectory),
-            FadeIn(slider),
+            Write(slider),
             FadeIn(responses),
-            FadeIn(mode_factor_axis),
+            Write(mode_factor_axis),
         )
         self.fragment(title="Overshoot the balanced step")
         self.play(
@@ -261,13 +244,12 @@ class GradientDescentModes(Slide):
 
         self.next_slide()
 
-        prior_equation_region, rate_summary_region = _split_rows(equations_region, [1, 2])
-        compact_mode_sum_top = eq_gd_mode_sum.copy()
+        prior_equation_region, rate_summary_region = _split_rows(equations_region, [2, 3])
+        compact_mode_sum_top = compact_mode_sum.copy()
         prior_equation_region.scale_and_place(
             compact_mode_sum_top,
             UP,
             buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
         )
 
         balance_condition = theme_math(
@@ -304,9 +286,12 @@ class GradientDescentModes(Slide):
         rate_summary_region.scale_and_place(
             rate_summary,
             buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
         )
-        self.play(Transform(eq_gd_mode_sum, compact_mode_sum_top), Write(rate_summary))
+        self.play(Unwrite(compact_mode_sum), Write(compact_mode_sum_top))
+        self.play(Write(balance_condition))
+        self.play(Write(rho_star))
+        self.play(Write(convergence_bound))
+        self.play(Write(iteration_bound))
         self.next_slide()
 
         self.clear_scene()

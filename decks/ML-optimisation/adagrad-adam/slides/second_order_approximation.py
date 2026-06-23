@@ -604,10 +604,8 @@ class SecondOrderApproximation(Slide):
             width=left.width - 2 * SMALL_BUFF,
             max_height=frame.height * LOCAL_LEGEND_FRAME_HEIGHT_RATIO,
             orientation="horizontal",
-            adaptive=True,
             fill_color=C_PANEL_SOFT,
         )
-        left.place(curvature_reminders, DL, buff=SMALL_BUFF)
         left.update(bottom=curvature_reminders)
 
         alpha_marker = x_marker(alpha_minimum, color=C_BLUE)

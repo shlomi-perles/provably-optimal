@@ -36,9 +36,10 @@ from slides.helpers.style import (
 )
 
 REMINDER_WIDTH_FRACTION = 1 / 3
-REMINDER_MAX_HEIGHT_FRACTION = 1 / 3
+REMINDER_MAX_HEIGHT_FRACTION = 0.4
 REMINDER_INNER_BUFF = 2 * SMALL_BUFF
 REMINDER_ENTRY_SHIFT = UP * SMALL_BUFF
+REMINDER_CORNER_BUFF = SMALL_BUFF
 REMINDER_EPSILON = float(np.finfo(float).eps)
 ReminderOrientation = Literal["vertical", "horizontal"]
 
@@ -117,7 +118,7 @@ class ReminderStack(Group):
 
         self._apply_layout()
         if self.corner is not None:
-            self.to_corner(self.corner)
+            self.to_corner(self.corner, buff=REMINDER_CORNER_BUFF)
 
     def add_reminder(self, reminder: Mobject) -> None:
         """Add a reminder immediately, without animation."""
