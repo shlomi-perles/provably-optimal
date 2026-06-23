@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from manim import (
+    DR,
     ReplacementTransform,
     SurroundingRectangle,
     TransformMatchingTex,
@@ -78,10 +79,11 @@ class GradientDescentModes(Slide):
         reminders = ReminderStack(
             [gd_update],
             width=mode_note_region.width,
+            corner=DR,
             orientation="horizontal",
         )
         reminder_parts = VGroup(reminders.frame, reminders.dividers, *reminders.entries)
-        self.region.place(reminders, DOWN)
+        self.region.place(reminders, DR, buff=SMALL_BUFF)
 
         proof_region = self.region.copy()
         proof_region.update(bottom=reminders)
@@ -190,6 +192,8 @@ class GradientDescentModes(Slide):
         )
         mode_factor_region.scale_and_place(mode_factor_axis, buff=0)
         mode_factor_axis.update()
+        rate_axis_title = mode_factor_axis[0]
+        rate_axis_axes = mode_factor_axis[2][0]
 
         dynamic_mobjects = VGroup(slider, trajectory, responses, mode_factor_axis)
         dynamic_mobjects.suspend_updating()
@@ -213,13 +217,18 @@ class GradientDescentModes(Slide):
         self.next_slide()
 
         reminder_chart_target = reminders.copy()
+        if reminder_chart_target.width > ZERO_AXIS_EPSILON:
+            reminder_chart_target.scale(rate_axis_axes.x_axis.width / reminder_chart_target.width)
         mode_note_region.update(
             left=response_chart_frame.get_left(),
             right=response_chart_frame.get_right(),
         )
-        mode_note_region.place(reminder_chart_target, UR)
-        reminder_chart_target.align_to(response_chart_frame, RIGHT)
-        equations_region.update(right=reminder_chart_target.get_left() + LEFT * SMALL_BUFF)
+        mode_note_region.place(reminder_chart_target, UR, buff=SMALL_BUFF)
+        reminder_chart_target.set_x(rate_axis_title.get_x())
+        compact_equations_region = equations_region.copy()
+        compact_equations_region.update(
+            right=reminder_chart_target.get_left() + LEFT * SMALL_BUFF
+        )
         compact_mode_sum = theme_math(
             r"\begin{aligned}"
             r"x_{t+1}-x^\star"
@@ -230,7 +239,7 @@ class GradientDescentModes(Slide):
             r"\end{aligned}",
         )
         _color_text_parts(compact_mode_sum, color_map)
-        equations_region.scale_and_place(
+        compact_equations_region.scale_and_place(
             compact_mode_sum,
             UL,
             buff=SMALL_BUFF,
@@ -294,51 +303,51 @@ class GradientDescentModes(Slide):
 
         self.next_slide()
 
-        prior_equation_region, rate_summary_region = _split_rows(equations_region, [2, 3])
-        compact_mode_sum_top = compact_mode_sum.copy()
-        prior_equation_region.scale_and_place(
-            compact_mode_sum_top,
-            UP,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
+        equations_region.update(bottom=frame)
+        compact_mode_sum_top = compact_mode_sum.copy().scale(1 / 2)
+        equations_region.place(compact_mode_sum_top, UL, buff=SMALL_BUFF)
+        rate_summary_region = equations_region.copy()
+        rate_summary_region.update(top=compact_mode_sum_top)
 
         balance_condition = theme_math(
-            r"1-\eta\lambda_{\min}=1-\eta\lambda_{\max}",
-            r"\quad\Rightarrow\quad",
-            r"\eta^\star=\frac{2}{\alpha+\beta}",
+            r"\begin{gathered}"
+            r"1-\eta\alpha=\eta\beta-1\\"
+            r"\eta^\star=\frac{2}{\alpha+\beta}"
+            r"\end{gathered}",
             typography="caption",
         )
         rho_star = theme_math(
             r"\rho_\star^{\mathrm{GD}}="
-            r"\max_{\lambda\in\{\alpha,\beta\}}"
-            r"|1-\eta^{\star}\lambda|"
             r"=1-\frac{2}{\kappa+1}",
             typography="caption",
         )
         convergence_bound = theme_math(
+            r"\begin{gathered}"
             r"f(x_t)-f_\star\le"
             r"(\rho_\star^{\mathrm{GD}})^{2t}"
-            r"\bigl(f(x_0)-f_\star\bigr)",
+            r"\\"
+            r"\bigl(f(x_0)-f_\star\bigr)"
+            r"\end{gathered}",
             typography="caption",
         )
         iteration_bound = theme_math(
-            r"t=O\left(\kappa\log\frac{1}{\epsilon}\right)",
+            r"t=O\left(\kappa\log(1/\epsilon)\right)",
             typography="caption",
         )
-        rate_summary = _formula_stack(
+        rate_summary = VGroup(
             balance_condition,
             rho_star,
             convergence_bound,
             iteration_bound,
-            buff=SMALL_BUFF,
-        )
+        ).arrange(RIGHT, aligned_edge=UP, buff=SMALL_BUFF)
         _color_text_parts(rate_summary, color_map)
         rate_summary_region.scale_and_place(
             rate_summary,
+            UL,
             buff=SMALL_BUFF,
+            scale_kwargs={"max_scale": 1},
         )
-        self.play(Unwrite(compact_mode_sum), Write(compact_mode_sum_top))
+        self.play(ReplacementTransform(compact_mode_sum, compact_mode_sum_top))
         self.play(Write(balance_condition))
         self.play(Write(rho_star))
         self.play(Write(convergence_bound))

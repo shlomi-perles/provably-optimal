@@ -165,7 +165,7 @@ MODE_CHART_BAR_WIDTH_FRACTION = 0.62
 MODE_CHART_BAR_MIN_HEIGHT_RATIO = 1 / 200
 MODE_CHART_BAR_PLACEHOLDER_RATIO = 1 / 100
 MODE_CHART_BAR_OPACITY = 0.88
-MODE_CHART_TAG_OFFSET = RIGHT * 0.60 + DOWN * 0.15
+MODE_CHART_TAG_INSET = (LEFT + DOWN) * SMALL_BUFF
 MODE_INITIAL_ETA_SUM_FACTOR = 0.54
 MODE_OVERSHOOT_ETA_NUMERATOR = 2.01
 MODE_FACTOR_INTERIOR_DOT_COUNT = 3
@@ -173,7 +173,7 @@ MODE_FACTOR_DOT_INITIAL_STEP = 1
 MODE_FACTOR_DOT_FINAL_STEP = 80
 MODE_FACTOR_DOT_RANDOM_SEED = 24
 MODE_FACTOR_AXIS_HEIGHT_RATIO = 1 / 5
-MODE_FACTOR_DOT_RADIUS_RATIO = 1 / 26
+MODE_FACTOR_DOT_RADIUS_RATIO = 2 / 26
 MODE_FACTOR_ZERO_TICK_DOT_HEIGHT_RATIO = 1.5
 MODE_FACTOR_DOT_COLORS = (C_BLUE, C_GREEN, C_PURPLE, C_YELLOW, C_ORANGE)
 C_ETA = C_GREEN
@@ -1142,7 +1142,8 @@ def _mode_multiplier_chart(
     y_label.scale_to_fit_height(frame.height / 2)
     y_label.next_to(frame, LEFT, buff=SMALL_BUFF)
     tag = theme_math(mode_tag, color=color, typography="caption")
-    tag.move_to(frame.get_corner(UL) + MODE_CHART_TAG_OFFSET)
+    tag.move_to(frame.get_corner(UR), aligned_edge=UR)
+    tag.shift(MODE_CHART_TAG_INSET)
     x_label = Caption(r"Iteration $t$") if show_x_label else VGroup()
     if show_x_label:
         x_label.next_to(frame, DOWN, buff=SMALL_BUFF)
@@ -1249,6 +1250,7 @@ def _mode_factor_axis(
         lambda_max=lambda_max,
         eta_values=eta_values,
     )
+    rate_axis_stroke_width = MODE_CHART_BASELINE_STROKE_WIDTH * 3
     axes = Axes(
         x_range=[-x_bound, x_bound, x_bound],
         y_range=[-1.0, 1.0, 1.0],
@@ -1259,7 +1261,7 @@ def _mode_factor_axis(
             "include_ticks": False,
             "include_numbers": False,
             "stroke_color": WHITE,
-            "stroke_width": MODE_CHART_BASELINE_STROKE_WIDTH,
+            "stroke_width": rate_axis_stroke_width,
             "stroke_opacity": 1.0,
         },
     )
@@ -1270,7 +1272,7 @@ def _mode_factor_axis(
         dot_radius * MODE_FACTOR_ZERO_TICK_DOT_HEIGHT_RATIO
     )
     zero_tick = Line(DOWN * zero_tick_half_height, UP * zero_tick_half_height)
-    zero_tick.set_stroke(WHITE, width=MODE_CHART_BASELINE_STROKE_WIDTH)
+    zero_tick.set_stroke(WHITE, width=rate_axis_stroke_width)
     zero_tick.move_to(axes.c2p(0, 0))
     zero_label = theme_math("0", color=C_TEXT, typography="caption")
     zero_label.next_to(zero_tick, DOWN, buff=SMALL_BUFF)
