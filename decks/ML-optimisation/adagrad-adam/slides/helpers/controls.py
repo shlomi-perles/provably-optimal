@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 import numpy as np
-from manim import DOWN, LEFT, RIGHT, SMALL_BUFF, UP, Dot, Line, MathTex, VGroup
+from manim import DOWN, LEFT, RIGHT, SMALL_BUFF, UP, CapStyleType, Dot, Line, MathTex, VGroup
 from simplex import DN, VT, get_active_theme
 
 from slides.helpers.style import C_TEXT, C_MUTED
@@ -49,6 +49,7 @@ class ValueSlider(VGroup):
 
         track = Line(LEFT * half_length, RIGHT * half_length)
         track.set_stroke(C_MUTED, width=SLIDER_TRACK_STROKE_WIDTH, opacity=SLIDER_TRACK_OPACITY)
+        track.set_cap_style(CapStyleType.ROUND)
 
         label = MathTex(spec.label, color=spec.color, font_size=label_size)
         value = DN(tracker, num_decimal_places=spec.decimals, font_size=value_size)
@@ -67,6 +68,7 @@ class ValueSlider(VGroup):
 
         fill = Line(track.get_start(), self._slider_point(track, tracker, spec))
         fill.set_stroke(spec.color, width=SLIDER_FILL_STROKE_WIDTH)
+        fill.set_cap_style(CapStyleType.ROUND)
         fill.add_updater(
             lambda mob: mob.put_start_and_end_on(
                 track.get_start(),
@@ -79,7 +81,13 @@ class ValueSlider(VGroup):
             radius=SMALL_BUFF,
         )
         knob.add_updater(lambda mob: mob.move_to(self._slider_point(track, tracker, spec)))
-        ticks = VGroup(*(self._tick(track, tracker_value, spec) for tracker_value in tick_values))
+        ticks = VGroup(
+            *(
+                self._tick(track, tracker_value, spec)
+                for tracker_value in tick_values
+                if not self._is_endpoint_tick(tracker_value, spec)
+            )
+        )
         mobjects = [label, track, ticks, fill, knob, value]
         if show_endpoint_labels:
             endpoint_label_texts = endpoint_label_texts or (
@@ -108,6 +116,12 @@ class ValueSlider(VGroup):
         tick.set_stroke(C_TEXT, width=SLIDER_TICK_STROKE_WIDTH, opacity=SLIDER_TICK_OPACITY)
         tick.move_to(track.point_from_proportion(float(np.clip(tick_alpha, 0, 1))))
         return tick
+
+    @staticmethod
+    def _is_endpoint_tick(tracker_value: float, spec: SliderSpec) -> bool:
+        return bool(
+            np.isclose(tracker_value, spec.minimum) or np.isclose(tracker_value, spec.maximum)
+        )
 
     @staticmethod
     def _slider_point(track: Line, tracker: VT, spec: SliderSpec) -> np.ndarray:
