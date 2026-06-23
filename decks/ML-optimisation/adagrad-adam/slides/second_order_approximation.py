@@ -76,35 +76,35 @@ class SecondOrderApproximation(Slide):
         x_min, x_max, x_step = LOCAL_X_RANGE
         base_x_span = x_max - x_min
         alpha_sweep_x = float(x_star + 4)
-        beta_start_x = float(x_t - 1)
-        beta_sweep_x = float(x_star + abs(x_star - x_t))
-        view_sweep_x = max(alpha_sweep_x, beta_sweep_x)
+        beta_right_sweep_x = float(x_star + 15)
+        beta_left_sweep_x = float(x_star - 15)
         zoom_anchor_x = float(x_star)
         zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
         zoom_padding = x_step / 2
-        zoom_out_scale = 3 * max(
-            1.0,
-            (view_sweep_x + zoom_padding - zoom_anchor_x)
-            / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
-            (zoom_anchor_x - min(x_min, x_t, beta_start_x) + zoom_padding)
-            / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
+        zoom_out_scale = (
+            3
+            / 4
+            * 3
+            * max(
+                1.0,
+                (alpha_sweep_x + zoom_padding - zoom_anchor_x)
+                / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
+                (zoom_anchor_x - min(x_min, x_t) + zoom_padding)
+                / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
+            )
         )
-        zoom_x_span = base_x_span * zoom_out_scale
-        zoom_x_min = zoom_anchor_x - zoom_anchor_x_ratio * zoom_x_span
-        zoom_x_max = zoom_x_min + zoom_x_span
         curvature_domain = np.linspace(
-            min(x_min, zoom_x_min, x_t, beta_start_x, alpha_sweep_x, beta_sweep_x),
-            max(x_max, zoom_x_max, x_t, alpha_sweep_x, beta_sweep_x),
+            x_min,
+            x_max,
             LOCAL_CURVE_SAMPLES,
         )
-        sweep_endpoints = (beta_start_x, x_t, alpha_sweep_x, beta_sweep_x)
         curvature_anchor_count = max(
-            len(sweep_endpoints),
+            2,
             LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT,
         )
         curvature_anchor_values = np.linspace(
-            min(sweep_endpoints),
-            max(sweep_endpoints),
+            x_min,
+            x_max,
             curvature_anchor_count,
         )
 
@@ -752,7 +752,7 @@ class SecondOrderApproximation(Slide):
             alpha_marker,
             beta_marker,
         )
-        left.scale_and_place(plot, buff=SMALL_BUFF)
+        left.scale_and_place(plot, buff=MED_SMALL_BUFF)
         right.update(left=plot)
 
         def plot_legend_entry(
@@ -851,7 +851,7 @@ class SecondOrderApproximation(Slide):
                 r"+\frac{1}{2}\delta^\top\nabla^2 f(x_t)\delta",
             )
         ).set_z_index(LAYER_MARKERS)
-        right.scale_and_place(hessian_equation, buff=MED_SMALL_BUFF)
+        right.scale_and_place(hessian_equation)
         hessian_region, definition_region = _split_rows(right, [1, 5])
         hessian_equation_top = hessian_equation.copy()
         hessian_region.scale_and_place(hessian_equation_top, buff=MED_SMALL_BUFF)
@@ -934,10 +934,13 @@ class SecondOrderApproximation(Slide):
 
         derivative_equation = color_formula(
             theme_math(
-                r"\nabla_\delta f_{apx}(\delta)="
+                r"\nabla_{",
+                r"\delta",
+                r"} f_{\text{apx}}(\delta)="
                 r"\nabla f(x_t)+\nabla^2 f(x_t)\delta",
             )
         )
+        derivative_equation[1].set_color(C_GREEN)
         newton_delta_equation = color_formula(
             theme_math(
                 r"\delta=-\frac{1}{\nabla^2 f(x_t)}\nabla f(x_t)",
@@ -1011,6 +1014,12 @@ class SecondOrderApproximation(Slide):
         )
         convergence_note.set_z_index(LAYER_MARKERS + 1)
 
+        computer_fire = ImageMobject("assets/figures/computer_fire.jpg")
+        computer_fire.rotate(-PI / 18)
+        computer_fire.scale_to_fit_width(right.width / 2)
+        right.place(computer_fire, DR, buff=SMALL_BUFF)
+        computer_fire.set_z_index(LAYER_MARKERS + 3)
+
         self.play(
             Write(title),
             Write(frame),
@@ -1039,6 +1048,7 @@ class SecondOrderApproximation(Slide):
 
         self.play(
             Transform(hessian_equation, hessian_equation_top),
+            Create(proof_separator),
             Write(lower_model),
             Write(alpha_marker),
             Write(definition_background),
@@ -1137,10 +1147,8 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOUND_OPACITY,
         )
         track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
-        alpha_sweep_run_time = 6 / (3 / 2)
-        self.play(alpha_anchor @ alpha_start_x, run_time=alpha_sweep_run_time)
-        self.play(alpha_anchor @ alpha_sweep_x, run_time=alpha_sweep_run_time)
-        self.play(alpha_anchor @ x_t, run_time=alpha_sweep_run_time)
+        self.play(alpha_anchor @ alpha_sweep_x, run_time=6)
+        self.play(alpha_anchor @ x_t, run_time=6)
         self.next_slide()
 
         for mob in (lower_model, alpha_marker):
@@ -1153,8 +1161,10 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOUND_OPACITY,
         )
         track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
-        self.play(beta_anchor @ beta_sweep_x, run_time=6)
-        self.play(beta_anchor @ x_t, run_time=6)
+        beta_sweep_run_time = 6 / (3 / 2)
+        self.play(beta_anchor @ beta_right_sweep_x, run_time=beta_sweep_run_time)
+        self.play(beta_anchor @ beta_left_sweep_x, run_time=beta_sweep_run_time)
+        self.play(beta_anchor @ x_t, run_time=beta_sweep_run_time)
         self.next_slide()
 
         for mob in (upper_model, beta_marker):
@@ -1164,8 +1174,6 @@ class SecondOrderApproximation(Slide):
             Unwrite(definition_background),
             Unwrite(alpha_definition),
             Unwrite(beta_definition),
-            Transform(hessian_equation, hessian_equation_top),
-            Create(proof_separator),
         )
         self.next_slide()
 
@@ -1190,6 +1198,7 @@ class SecondOrderApproximation(Slide):
             Transform(highlighted_newton, highlighted_newton_top),
         )
         self.play(Write(convergence_note))
+        self.play(FadeIn(computer_fire))
         self.next_slide()
 
         self.clear_scene()
