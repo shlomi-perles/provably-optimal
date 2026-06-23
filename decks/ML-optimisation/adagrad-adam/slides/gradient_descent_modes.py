@@ -18,8 +18,8 @@ class GradientDescentModes(Slide):
         self.region.update(left=title.get_left(), right=title.get_right())
         intro_region, proof_region = _split_rows(self.region, [1, 5])
         function_region, _ = _split_rows(intro_region, [1, 1])
-        top, bottom = _split_rows(self.region, [3, 4])
-        equations_region, mode_factor_region = _split_weighted(top, [3, 2])
+        top, bottom = _split_rows(self.region, [1, 2])
+        equations_region, mode_factor_region = _split_weighted(top, [2, 3])
         figure_region, response_region = _split_weighted(bottom, [2, 3])
         matrix, _ = _rotated_quadratic_matrix()
         eigenvalues, _ = _quadratic_eigendecomposition(matrix)
@@ -72,10 +72,6 @@ class GradientDescentModes(Slide):
 
         derivation_page = TexPage(
             r"\["
-            r"\nabla f(x_t)=A(x_t-x^\star)"
-            r"\]"
-            r"Therefore"
-            r"\["
             r"\begin{aligned}"
             r"x_{t+1}-x^\star"
             r"&=x_t-x^\star-\eta\nabla f(x_t),\\"
@@ -98,10 +94,10 @@ class GradientDescentModes(Slide):
             r"\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}"
             r"\end{aligned}"
             r"\]",
-            page_width=self.region,
+            page_width=proof_region,
         )
         color_substrings(derivation_page, color_map, probe_class=MathTex)
-        proof_region.scale_and_place(derivation_page)
+        proof_region.place(derivation_page)
         eq_gd_mode_sum = derivation_page.equation(3)
         gd_mode_sum_frame = SurroundingRectangle(
             eq_gd_mode_sum,
@@ -201,9 +197,9 @@ class GradientDescentModes(Slide):
             Write(frame),
             Write(markers),
             Write(trajectory),
-            Write(slider),
+            FadeIn(slider),
             FadeIn(responses),
-            Write(mode_factor_axis),
+            FadeIn(mode_factor_axis),
         )
         self.fragment(title="Overshoot the balanced step")
         self.play(
