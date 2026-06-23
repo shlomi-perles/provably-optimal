@@ -249,22 +249,57 @@ class SecondOrderApproximation(Slide):
         graph_grid = VGroup().set_z_index(LAYER_CONTOUR)
         update_graph_grid(graph_grid)
 
+        def clipped_curve_points(
+            xs: FloatArray,
+            ys: FloatArray,
+            *,
+            y_min: float,
+            y_max: float,
+        ) -> list[FloatArray]:
+            points: list[FloatArray] = []
+            previous: tuple[float, float] | None = None
+            for x_raw, y_raw in zip(xs, ys, strict=True):
+                if not np.isfinite(y_raw):
+                    previous = None
+                    continue
+
+                x_value = float(x_raw)
+                y_value = float(y_raw)
+                if previous is not None:
+                    previous_x, previous_y = previous
+                    y_delta = y_value - previous_y
+                    if abs(y_delta) > ZERO_AXIS_EPSILON:
+                        crossings: list[tuple[float, float, float]] = []
+                        for boundary_y in (y_min, y_max):
+                            ratio = (boundary_y - previous_y) / y_delta
+                            if ZERO_AXIS_EPSILON < ratio < 1 - ZERO_AXIS_EPSILON:
+                                x_boundary = previous_x + ratio * (x_value - previous_x)
+                                crossings.append((ratio, x_boundary, boundary_y))
+                        for _, x_boundary, boundary_y in sorted(crossings):
+                            points.append(data_point(x_boundary, boundary_y))
+                if y_min <= y_value <= y_max:
+                    points.append(data_point(x_value, y_value))
+                previous = (x_value, y_value)
+            return points
+
         def curve_points(fn: Callable[[FloatArray], FloatArray]) -> list[FloatArray]:
             view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
             visible_xs = np.linspace(view_x_min, view_x_max, LOCAL_CURVE_SAMPLES)
             ys = fn(visible_xs)
-            mask = np.isfinite(ys) & (ys >= view_y_min) & (ys <= view_y_max)
-            points = [
-                data_point(float(x), float(y))
-                for x, y in zip(visible_xs[mask], ys[mask], strict=True)
-            ]
+            points = clipped_curve_points(
+                visible_xs,
+                ys,
+                y_min=view_y_min,
+                y_max=view_y_max,
+            )
             if len(points) < 2:
                 clipped_y = float(np.clip(ys[0], view_y_min, view_y_max))
                 points = [data_point(float(visible_xs[0]), clipped_y)]
                 points.append(points[0] + RIGHT * POLYLINE_FALLBACK_STEP)
             return points
 
-        model_dash_count = max(2, LOCAL_MODEL_DASH_COUNT // 4)
+        local_model_dash_count = LOCAL_MODEL_DASH_COUNT
+        vertical_guide_dash_count = max(2, LOCAL_MODEL_DASH_COUNT // 4)
 
         def update_curve(
             mob: VMobject,
@@ -307,66 +342,33 @@ class SecondOrderApproximation(Slide):
                 )
             )
 
-        def update_dash(
-            dash: VMobject,
-            fn: Callable[[FloatArray], FloatArray],
-            x_start: float,
-            x_end: float,
-            *,
-            color: str,
-            width: float,
-        ) -> None:
-            _, _, view_y_min, view_y_max = view_limits()
-            sample_count = max(2, LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT)
-            dash_xs = np.linspace(x_start, x_end, sample_count)
-            dash_ys = fn(dash_xs)
-            mask = np.isfinite(dash_ys) & (dash_ys >= view_y_min) & (dash_ys <= view_y_max)
-            points = [
-                data_point(float(x), float(y))
-                for x, y in zip(dash_xs[mask], dash_ys[mask], strict=True)
-            ]
-            if len(points) < 2:
-                dash.clear_points()
-                dash.set_stroke(color, width=width, opacity=0)
-                return
-            dash.set_points_smoothly(points)
-            dash.set_stroke(color, width=width)
-            dash.set_z_index(LAYER_TRAJECTORY)
-
         def dashed_curve_for(
             fn: Callable[[FloatArray], FloatArray],
             *,
             color: str,
             width: float,
-        ) -> VGroup:
-            curve = VGroup(*(VMobject() for _ in range(model_dash_count))).set_z_index(
-                LAYER_TRAJECTORY
+        ) -> DashedVMobject:
+            base_curve = curve_for(fn, color=color, width=width)
+            curve = DashedVMobject(
+                base_curve,
+                num_dashes=local_model_dash_count,
+                color=color,
             )
-            update_dashed_curve(curve, fn, color=color, width=width)
+            curve.set_stroke(color, width=width)
+            curve.set_z_index(LAYER_TRAJECTORY)
             return curve
 
         def update_dashed_curve(
-            mob: VGroup,
+            mob: VMobject,
             fn: Callable[[FloatArray], FloatArray],
             *,
             color: str,
             width: float,
         ) -> None:
-            view_x_min, view_x_max, _, _ = view_limits()
-            dash_span = (view_x_max - view_x_min) / (2 * len(mob) - 1)
-            for index, dash in enumerate(mob):
-                dash_x_start = view_x_min + 2 * index * dash_span
-                update_dash(
-                    dash,
-                    fn,
-                    dash_x_start,
-                    min(dash_x_start + dash_span, view_x_max),
-                    color=color,
-                    width=width,
-                )
+            mob.become(dashed_curve_for(fn, color=color, width=width))
 
         def track_dashed_curve(
-            mob: VGroup,
+            mob: VMobject,
             fn: Callable[[FloatArray], FloatArray],
             *,
             color: str,
@@ -514,7 +516,9 @@ class SecondOrderApproximation(Slide):
             color: str,
             opacity: float,
         ) -> VGroup:
-            guide = VGroup(*(Line() for _ in range(model_dash_count))).set_z_index(LAYER_TRAJECTORY)
+            guide = VGroup(*(Line() for _ in range(vertical_guide_dash_count))).set_z_index(
+                LAYER_TRAJECTORY
+            )
             update_vertical_guide(guide, x_fn, color=color, opacity=opacity)
             return guide
 
@@ -769,7 +773,7 @@ class SecondOrderApproximation(Slide):
 
         f_legend = plot_legend_entry(r"f(x)", color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
         hessian_legend = plot_legend_entry(
-            r"m_{\nabla^2}(x)=f(x_t)"
+            r"f(x_t)"
             r"+\left\langle\nabla f(x_t),x-x_t\right\rangle"
             r"+\frac{1}{2}(x-x_t)^\top\nabla^2 f(x_t)(x-x_t)",
             color=C_GREEN,
@@ -777,14 +781,14 @@ class SecondOrderApproximation(Slide):
             dashed=True,
         )
         alpha_legend = plot_legend_entry(
-            r"m_{\alpha}(x)=f(x_t)"
+            r"f(x_t)"
             r"+\left\langle\nabla f(x_t),x-x_t\right\rangle"
             r"+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2",
             color=C_BLUE,
             width=LOCAL_BOUND_STROKE_WIDTH,
         )
         beta_legend = plot_legend_entry(
-            r"m_{\beta}(x)=f(x_t)"
+            r"f(x_t)"
             r"+\left\langle\nabla f(x_t),x-x_t\right\rangle"
             r"+\frac{\beta}{2}\left\|x-x_t\right\|_2^2",
             color=C_ORANGE,
@@ -1019,6 +1023,82 @@ class SecondOrderApproximation(Slide):
         right.place(computer_fire, DR, buff=SMALL_BUFF)
         computer_fire.set_z_index(LAYER_MARKERS + 3)
 
+        plot_view_mobjects = (
+            true_curve,
+            local_model,
+            lower_model,
+            upper_model,
+            x_t_dot,
+            newton_dot,
+            star_dot,
+            x_t_tick,
+            next_tick,
+            x_t_value,
+            star_label,
+            x_line,
+            next_line,
+            delta_bracket,
+            delta_label,
+            alpha_marker,
+            beta_marker,
+            graph_grid,
+        )
+
+        def track_plot_view() -> None:
+            track_curve(true_curve, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
+            track_dashed_curve(
+                local_model,
+                local_model_values,
+                color=C_GREEN,
+                width=LOCAL_MODEL_STROKE_WIDTH,
+            )
+            track_curve(
+                lower_model,
+                lower_model_values,
+                color=C_BLUE,
+                width=LOCAL_BOUND_STROKE_WIDTH,
+                opacity=LOCAL_BOUND_OPACITY,
+            )
+            track_curve(
+                upper_model,
+                upper_model_values,
+                color=C_ORANGE,
+                width=LOCAL_BOUND_STROKE_WIDTH,
+                opacity=LOCAL_BOUND_OPACITY,
+            )
+            track_dot(x_t_dot, lambda: x_t, lambda: f_t)
+            track_dot(newton_dot, lambda: x_next, lambda: y_next)
+            track_dot(star_dot, lambda: float(x_star), lambda: f_star)
+            track_bottom_tick(x_t_tick, lambda: x_t, color=C_YELLOW)
+            track_bottom_tick(next_tick, lambda: x_next, color=C_YELLOW)
+            track_label_next_to_dot(x_t_value, x_t_dot, DL, 0)
+            track_label_next_to_dot(star_label, star_dot, DR, 0)
+            track_vertical_guide(
+                x_line,
+                lambda: x_t,
+                color=C_YELLOW,
+                opacity=LOCAL_CURRENT_GUIDE_OPACITY,
+            )
+            track_vertical_guide(
+                next_line,
+                lambda: x_next,
+                color=C_GREEN,
+                opacity=LOCAL_NEXT_GUIDE_OPACITY,
+            )
+            track_delta_bracket(delta_bracket)
+            track_delta_label(delta_label)
+            track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
+            track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
+            graph_grid.add_updater(update_graph_grid)
+
+        def clear_plot_view_updaters() -> None:
+            for mob in plot_view_mobjects:
+                mob.clear_updaters()
+
+        def refresh_plot_view() -> None:
+            for mob in plot_view_mobjects:
+                mob.update(0)
+
         self.play(
             Write(title),
             Write(frame),
@@ -1028,13 +1108,9 @@ class SecondOrderApproximation(Slide):
             Write(true_curve),
             Write(local_model),
             Write(newton_dot),
-            Write(next_tick),
             Write(star_dot),
             Write(star_label),
             Write(x_line),
-            Write(next_line),
-            Write(delta_bracket),
-            Write(delta_label),
             Write(x_t_dot),
             Write(x_t_tick),
             Write(x_t_value),
@@ -1069,73 +1145,10 @@ class SecondOrderApproximation(Slide):
         )
         self.next_slide()
 
-        track_curve(true_curve, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
-        track_dashed_curve(
-            local_model,
-            local_model_values,
-            color=C_GREEN,
-            width=LOCAL_MODEL_STROKE_WIDTH,
-        )
-        track_curve(
-            lower_model,
-            lower_model_values,
-            color=C_BLUE,
-            width=LOCAL_BOUND_STROKE_WIDTH,
-            opacity=LOCAL_BOUND_OPACITY,
-        )
-        track_curve(
-            upper_model,
-            upper_model_values,
-            color=C_ORANGE,
-            width=LOCAL_BOUND_STROKE_WIDTH,
-            opacity=LOCAL_BOUND_OPACITY,
-        )
-        track_dot(x_t_dot, lambda: x_t, lambda: f_t)
-        track_dot(newton_dot, lambda: x_next, lambda: y_next)
-        track_dot(star_dot, lambda: float(x_star), lambda: f_star)
-        track_bottom_tick(x_t_tick, lambda: x_t, color=C_YELLOW)
-        track_bottom_tick(next_tick, lambda: x_next, color=C_YELLOW)
-        track_label_next_to_dot(x_t_value, x_t_dot, DL, 0)
-        track_label_next_to_dot(star_label, star_dot, DR, 0)
-        track_vertical_guide(
-            x_line,
-            lambda: x_t,
-            color=C_YELLOW,
-            opacity=LOCAL_CURRENT_GUIDE_OPACITY,
-        )
-        track_vertical_guide(
-            next_line,
-            lambda: x_next,
-            color=C_GREEN,
-            opacity=LOCAL_NEXT_GUIDE_OPACITY,
-        )
-        track_delta_bracket(delta_bracket)
-        track_delta_label(delta_label)
-        track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
-        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
-        graph_grid.add_updater(update_graph_grid)
+        track_plot_view()
         self.play(view_scale @ zoom_out_scale)
-        for mob in (
-            true_curve,
-            local_model,
-            lower_model,
-            upper_model,
-            x_t_dot,
-            newton_dot,
-            star_dot,
-            x_t_tick,
-            next_tick,
-            x_t_value,
-            star_label,
-            x_line,
-            next_line,
-            delta_bracket,
-            delta_label,
-            alpha_marker,
-            beta_marker,
-            graph_grid,
-        ):
-            mob.clear_updaters()
+        refresh_plot_view()
+        clear_plot_view_updaters()
         self.next_slide()
 
         track_curve(
@@ -1172,6 +1185,10 @@ class SecondOrderApproximation(Slide):
         )
         self.next_slide()
 
+        track_plot_view()
+        self.play(view_scale @ 1)
+        refresh_plot_view()
+        clear_plot_view_updaters()
         self.play(Write(derivative_equation))
         self.next_slide()
 
@@ -1179,6 +1196,9 @@ class SecondOrderApproximation(Slide):
         self.next_slide()
 
         self.play(Write(second_down_arrow), Write(newton_update), Write(delta_relation_note))
+        self.next_slide()
+
+        self.play(Write(next_line), Write(next_tick), Write(delta_bracket), Write(delta_label))
         self.play(Create(newton_frame))
         self.next_slide()
 
