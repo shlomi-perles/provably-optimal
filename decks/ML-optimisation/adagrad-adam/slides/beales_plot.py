@@ -59,11 +59,11 @@ BEALE_PUSH_STRENGTH = 0.25
 BEALE_Z_MAX = 20.0
 BEALE_GRID_POINTS = 250
 BEALE_PATCH_POINTS = 96
-BEALE_START_POINT = np.array([1.6, 2.7], dtype=np.float64)
+BEALE_START_POINT = np.array([1.1, 2.2], dtype=np.float64)
 BEALE_LEARNING_RATE = 0.7
+GRADIENT_DESCENT_LEARNING_RATE = BEALE_LEARNING_RATE / 2
 BEALE_MOMENTUM = 0.65
 BEALE_STEPS = 3
-GRADIENT_DESCENT_MODEL_STEP_COUNT = 2
 FINITE_DIFFERENCE_STEP = 1e-2
 ADAGRAD_START_POINT = np.array([0.42, -5.7], dtype=np.float64)
 ADAGRAD_EPSILON = FINITE_DIFFERENCE_STEP**2
@@ -88,10 +88,8 @@ MODEL_OPACITIES: tuple[float | None, ...] = (0.55, 0.75, 1.0)
 MARKER_Z_LIFT = 0.24
 MODEL_CAP_LIFT = 0.3
 GRADIENT_DESCENT_MODEL_CAP_LIFT = MODEL_CAP_LIFT
-GRADIENT_DESCENT_MODEL_OPACITIES: tuple[float | None, ...] = (
-    None,
-) * GRADIENT_DESCENT_MODEL_STEP_COUNT
-ADAGRAD_MODEL_CAP_LIFT = 2.0
+GRADIENT_DESCENT_MODEL_OPACITIES: tuple[float | None, ...] = (None,) * BEALE_STEPS
+ADAGRAD_MODEL_CAP_LIFT = MODEL_CAP_LIFT
 ADAGRAD_MODEL_OPACITIES: tuple[float | None, ...] = (None,)
 LABEL_XY_OFFSETS = np.array(
     [
@@ -113,10 +111,14 @@ AXIS_STROKE_WIDTH = 2.0
 AXIS_LABEL_INSET_TO_DOMAIN = 0.16
 AXIS_LABEL_SIDE_TO_DOMAIN = 0.42
 AXIS_Z_LABEL_HEIGHT_TO_RANGE = 0.68
-CAMERA_INITIAL_PHI = 54 * DEGREES
-CAMERA_INITIAL_THETA = -46 * DEGREES
-CAMERA_FINAL_PHI = 62 * DEGREES
-CAMERA_FINAL_THETA = -38 * DEGREES
+CAMERA_INITIAL_PHI = (90 - 37.5) * DEGREES
+CAMERA_INITIAL_THETA = -67.4 * DEGREES
+CAMERA_FINAL_PHI = (90 - 27.7) * DEGREES
+CAMERA_FINAL_THETA = -28.5 * DEGREES
+ADAGRAD_CAMERA_INITIAL_PHI = 54 * DEGREES
+ADAGRAD_CAMERA_INITIAL_THETA = -46 * DEGREES
+ADAGRAD_CAMERA_FINAL_PHI = 62 * DEGREES
+ADAGRAD_CAMERA_FINAL_THETA = -38 * DEGREES
 CAMERA_MOVE_RUN_TIME = 2.0
 PLOT_HUD_WIDTH_RATIOS = (3.2, 1.0)
 WORLD_CENTER_LIFT = UP * 0.08 + np.array([0.0, 0.0, -0.28])
@@ -132,12 +134,14 @@ HUD_Z_INDEX = 20
 class ModelPatchSpec:
     center: FloatArray
     radius: float
+    min_height: float
     cap_height: float
+    learning_rate: float
     opacity: float | None
 
     @property
     def cap_delta(self) -> float:
-        return 0.5 * self.radius**2 / BEALE_LEARNING_RATE
+        return self.cap_height - self.min_height
 
 
 @dataclass(frozen=True, slots=True)
@@ -235,7 +239,7 @@ def _simulate_gradient_descent_steps() -> FloatArray:
     point = BEALE_START_POINT.copy()
     points = [point.copy()]
     for _ in range(BEALE_STEPS):
-        point = point - BEALE_LEARNING_RATE * _gradient_at(point)
+        point = point - GRADIENT_DESCENT_LEARNING_RATE * _gradient_at(point)
         points.append(point.copy())
     return np.asarray(points, dtype=np.float64)
 
@@ -256,26 +260,54 @@ def _make_plot_data(
     *,
     model_cap_lift: float,
     model_opacities: Sequence[float | None],
+    model_learning_rate: float,
+    visible_start: int = 0,
+    constant_cap_delta: float | None = None,
+    patch_cap_deltas: Sequence[float] | None = None,
 ) -> BealePlotData:
-    visible_points = points[:3]
     point_heights = np.asarray([_displayed_beale_height(point) for point in points])
-    visible_heights = point_heights[:3]
+    visible_stop = min(len(points), visible_start + len(LABEL_XY_OFFSETS))
+    visible_points = points[visible_start:visible_stop]
+    visible_heights = point_heights[visible_start:visible_stop]
     marker_heights = visible_heights + MARKER_Z_LIFT
     label_xy = visible_points + LABEL_XY_OFFSETS[: len(visible_points)]
     label_heights = visible_heights + LABEL_Z_OFFSETS[: len(visible_points)]
 
     patches: list[ModelPatchSpec] = []
-    for opacity, (base_point, next_point), base_height in zip(
-        model_opacities,
-        pairwise(points),
-        point_heights[:-1],
-        strict=True,
+    if patch_cap_deltas is not None and len(patch_cap_deltas) != len(model_opacities):
+        raise ValueError("patch_cap_deltas must match model_opacities")
+
+    for patch_index, (opacity, (base_point, next_point), base_height, next_height) in enumerate(
+        zip(
+            model_opacities,
+            pairwise(points),
+            point_heights[:-1],
+            point_heights[1:],
+            strict=True,
+        )
     ):
+        if constant_cap_delta is None:
+            cap_height = float(base_height + model_cap_lift)
+            if patch_cap_deltas is None:
+                radius = float(np.linalg.norm(next_point - base_point))
+                cap_delta = 0.5 * radius**2 / model_learning_rate
+            else:
+                cap_delta = float(patch_cap_deltas[patch_index])
+                radius = float(np.sqrt(2.0 * model_learning_rate * cap_delta))
+            min_height = cap_height - cap_delta
+        else:
+            cap_delta = float(constant_cap_delta)
+            radius = float(np.sqrt(2.0 * model_learning_rate * cap_delta))
+            min_height = float(next_height)
+            cap_height = min_height + cap_delta
+
         patches.append(
             ModelPatchSpec(
                 center=next_point,
-                radius=float(np.linalg.norm(next_point - base_point)),
-                cap_height=float(base_height + model_cap_lift),
+                radius=radius,
+                min_height=min_height,
+                cap_height=cap_height,
+                learning_rate=model_learning_rate,
                 opacity=opacity,
             )
         )
@@ -304,9 +336,15 @@ class BealesPlot(ThreeDSlide):
     label_texts = (r"x_{t-1}", r"x_t", r"x_{t+1}")
     model_cap_lift = MODEL_CAP_LIFT
     model_opacities = MODEL_OPACITIES
+    model_learning_rate = BEALE_LEARNING_RATE
+    visible_start = 0
     surface_resolution = SURFACE_RESOLUTION
     patch_resolution = PATCH_RESOLUTION
     path_color = C_GREEN
+    camera_initial_phi = CAMERA_INITIAL_PHI
+    camera_initial_theta = CAMERA_INITIAL_THETA
+    camera_final_phi = CAMERA_FINAL_PHI
+    camera_final_theta = CAMERA_FINAL_THETA
 
     def setup(self) -> None:
         super().setup()
@@ -314,7 +352,7 @@ class BealesPlot(ThreeDSlide):
 
     def construct(self) -> None:
         self.slide(title=self.slide_title)
-        self.set_camera_orientation(phi=CAMERA_INITIAL_PHI, theta=CAMERA_INITIAL_THETA)
+        self.set_camera_orientation(phi=self.camera_initial_phi, theta=self.camera_initial_theta)
 
         data = self._make_plot_data()
         title = Title(self.slide_title)
@@ -358,8 +396,8 @@ class BealesPlot(ThreeDSlide):
         self.fragment(title=self.model_fragment_title)
         self.play(Create(patches), Write(hud_mobjects[1]), Write(hud_mobjects[2]))
         self.move_camera(
-            phi=CAMERA_FINAL_PHI,
-            theta=CAMERA_FINAL_THETA,
+            phi=self.camera_final_phi,
+            theta=self.camera_final_theta,
             run_time=CAMERA_MOVE_RUN_TIME,
         )
 
@@ -371,6 +409,8 @@ class BealesPlot(ThreeDSlide):
             self._trajectory_points(),
             model_cap_lift=self.model_cap_lift,
             model_opacities=self.model_opacities,
+            model_learning_rate=self.model_learning_rate,
+            visible_start=self.visible_start,
         )
 
     def _make_axes(self, data: BealePlotData) -> ThreeDAxes:
@@ -400,7 +440,7 @@ class BealesPlot(ThreeDSlide):
     def _make_patch(self, axes: ThreeDAxes, spec: ModelPatchSpec) -> ScalarFieldSurface:
         def patch_point(radius: float, angle: float) -> FloatArray:
             xy = spec.center + radius * np.array([np.cos(angle), np.sin(angle)])
-            height = spec.cap_height - spec.cap_delta + 0.5 * radius**2 / BEALE_LEARNING_RATE
+            height = spec.min_height + 0.5 * radius**2 / spec.learning_rate
             return axes.c2p(float(xy[0]), float(xy[1]), float(height))
 
         surface_kwargs = {}
@@ -536,14 +576,29 @@ class BealesGradientDescentPlot(BealesPlot):
     sample_fragment_title = "Gradient descent samples"
     update_equation = r"x_{t+1}=x_t-\eta\nabla f(x_t)"
     model_caption = "gradient descent models"
-    model_bound = rf"Q_t(x)\le f(x_t)+{GRADIENT_DESCENT_MODEL_CAP_LIFT:g}"
-    label_texts = (r"x_{t-1}", r"x_t", r"x_{t+1}")
+    model_bound = r"z_i-Q_i(x_{i+1})=c"
+    label_texts = (r"x_t", r"x_{t+1}", r"x_{t+2}")
     model_cap_lift = GRADIENT_DESCENT_MODEL_CAP_LIFT
     model_opacities = GRADIENT_DESCENT_MODEL_OPACITIES
+    model_learning_rate = GRADIENT_DESCENT_LEARNING_RATE
+    visible_start = 1
     patch_resolution = GRADIENT_DESCENT_PATCH_RESOLUTION
 
     def _trajectory_points(self) -> FloatArray:
-        return _simulate_gradient_descent_steps()[: GRADIENT_DESCENT_MODEL_STEP_COUNT + 1]
+        return _simulate_gradient_descent_steps()
+
+    def _make_plot_data(self) -> BealePlotData:
+        points = self._trajectory_points()
+        point_heights = np.asarray([_displayed_beale_height(point) for point in points])
+        cap_delta = float(point_heights[0] - point_heights[1])
+        return _make_plot_data(
+            points,
+            model_cap_lift=self.model_cap_lift,
+            model_opacities=self.model_opacities,
+            model_learning_rate=self.model_learning_rate,
+            visible_start=self.visible_start,
+            constant_cap_delta=cap_delta,
+        )
 
 
 class BealesAdaGradPlot(BealesPlot):
@@ -560,26 +615,39 @@ class BealesAdaGradPlot(BealesPlot):
     model_opacities = ADAGRAD_MODEL_OPACITIES
     patch_resolution = GRADIENT_DESCENT_PATCH_RESOLUTION
     path_color = C_TEAL
+    camera_initial_phi = ADAGRAD_CAMERA_INITIAL_PHI
+    camera_initial_theta = ADAGRAD_CAMERA_INITIAL_THETA
+    camera_final_phi = ADAGRAD_CAMERA_FINAL_PHI
+    camera_final_theta = ADAGRAD_CAMERA_FINAL_THETA
 
     def _trajectory_points(self) -> FloatArray:
         return _simulate_adagrad_step()
 
-    def _make_patch(self, axes: ThreeDAxes, spec: ModelPatchSpec) -> ScalarFieldSurface:
+    def _make_plot_data(self) -> BealePlotData:
         gradient, scale = _adagrad_gradient_and_scale(ADAGRAD_START_POINT)
         inverse_scale = np.divide(1.0, scale)
         cap_delta = 0.5 * BEALE_LEARNING_RATE * float(gradient @ (inverse_scale * gradient))
-        radius = np.sqrt(2 * BEALE_LEARNING_RATE * cap_delta)
+        return _make_plot_data(
+            self._trajectory_points(),
+            model_cap_lift=self.model_cap_lift,
+            model_opacities=self.model_opacities,
+            model_learning_rate=self.model_learning_rate,
+            patch_cap_deltas=(cap_delta,),
+        )
+
+    def _make_patch(self, axes: ThreeDAxes, spec: ModelPatchSpec) -> ScalarFieldSurface:
+        _, scale = _adagrad_gradient_and_scale(ADAGRAD_START_POINT)
         inverse_sqrt_scale = np.divide(1.0, np.sqrt(scale))
 
         def patch_point(local_radius: float, angle: float) -> FloatArray:
             local = local_radius * np.array([np.cos(angle), np.sin(angle)], dtype=np.float64)
             xy = spec.center + inverse_sqrt_scale * local
-            height = spec.cap_height - cap_delta + 0.5 * local_radius**2 / BEALE_LEARNING_RATE
+            height = spec.min_height + 0.5 * local_radius**2 / spec.learning_rate
             return axes.c2p(float(xy[0]), float(xy[1]), float(height))
 
         return ScalarFieldSurface(
             patch_point,
-            u_range=[0.0, radius],
+            u_range=[0.0, spec.radius],
             v_range=[0.0, TAU],
             resolution=self.patch_resolution,
             color_func="height",
