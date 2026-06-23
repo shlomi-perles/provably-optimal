@@ -39,6 +39,7 @@ REMINDER_WIDTH_FRACTION = 1 / 2
 REMINDER_MAX_HEIGHT_FRACTION = 1/3
 REMINDER_INNER_BUFF = 2 * SMALL_BUFF
 REMINDER_HORIZONTAL_EXTRA_HEIGHT = SMALL_BUFF
+REMINDER_HORIZONTAL_HEIGHT_SCALE = 3 / 2
 REMINDER_ENTRY_SHIFT = UP * SMALL_BUFF
 REMINDER_CORNER_BUFF = SMALL_BUFF
 REMINDER_EPSILON = float(np.finfo(float).eps)
@@ -302,7 +303,7 @@ class ReminderStack(Group):
         if self._fixed_height is None and len(entries) > 0:
             self._fixed_height = (
                 self._horizontal_frame_height_for(entries) + REMINDER_HORIZONTAL_EXTRA_HEIGHT
-            )
+            ) * REMINDER_HORIZONTAL_HEIGHT_SCALE
         if self._fixed_height is not None:
             return self._fixed_height
         return 2 * self.cell_buff
