@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from manim import NumberPlane, RoundedRectangle, SurroundingRectangle, Transform, Unwrite
+from manim import RoundedRectangle, SurroundingRectangle, Transform, Unwrite
 from simplex.engine.region import Region
 
 from slides.helpers.figure_helpers import *
@@ -75,29 +75,29 @@ class SecondOrderApproximation(Slide):
         f_star = float(f(np.array([x_star]))[0])
         x_min, x_max, x_step = LOCAL_X_RANGE
         base_x_span = x_max - x_min
-        alpha_start_x = float(x_t - 1)
-        alpha_sweep_x = float(x_star + 1)
+        alpha_sweep_x = float(x_star + 4)
+        beta_start_x = float(x_t - 1)
         beta_sweep_x = float(x_star + abs(x_star - x_t))
         view_sweep_x = max(alpha_sweep_x, beta_sweep_x)
         zoom_anchor_x = float(x_star)
         zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
         zoom_padding = x_step / 2
-        zoom_out_scale = max(
+        zoom_out_scale = 3 * max(
             1.0,
             (view_sweep_x + zoom_padding - zoom_anchor_x)
             / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
-            (zoom_anchor_x - min(x_min, x_t) + zoom_padding)
+            (zoom_anchor_x - min(x_min, x_t, beta_start_x) + zoom_padding)
             / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
         )
         zoom_x_span = base_x_span * zoom_out_scale
         zoom_x_min = zoom_anchor_x - zoom_anchor_x_ratio * zoom_x_span
         zoom_x_max = zoom_x_min + zoom_x_span
         curvature_domain = np.linspace(
-            min(x_min, zoom_x_min, x_t, alpha_start_x, alpha_sweep_x, beta_sweep_x),
+            min(x_min, zoom_x_min, x_t, beta_start_x, alpha_sweep_x, beta_sweep_x),
             max(x_max, zoom_x_max, x_t, alpha_sweep_x, beta_sweep_x),
             LOCAL_CURVE_SAMPLES,
         )
-        sweep_endpoints = (alpha_start_x, x_t, alpha_sweep_x, beta_sweep_x)
+        sweep_endpoints = (beta_start_x, x_t, alpha_sweep_x, beta_sweep_x)
         curvature_anchor_count = max(
             len(sweep_endpoints),
             LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT,
@@ -181,59 +181,12 @@ class SecondOrderApproximation(Slide):
             width=LOCAL_BOTTOM_AXIS_STROKE_WIDTH,
             opacity=LOCAL_BOTTOM_AXIS_OPACITY,
         )
-        graph_grid = NumberPlane(
-            x_range=(0, grid_col_count, 1),
-            y_range=(0, grid_row_count, 1),
-            x_length=frame.width,
-            y_length=frame.height,
-            axis_config={"stroke_opacity": 0},
-            background_line_style={
-                "stroke_color": C_GRID,
-                "stroke_width": GRID_LINE_STROKE_WIDTH,
-                "stroke_opacity": GRID_LINE_OPACITY,
-            },
-        )
-        graph_grid.move_to(frame)
-        graph_grid.set_z_index(LAYER_CONTOUR)
-
         base_y_span = y_max - y_min
         zoom_anchor_y = f_star
         zoom_anchor_y_ratio = (zoom_anchor_y - y_min) / base_y_span
 
         def view_scale_factor() -> float:
             return max(float(~view_scale), ZERO_AXIS_EPSILON)
-
-        def update_graph_grid(mob: VMobject) -> None:
-            cell_size = grid_cell_size / view_scale_factor()
-            left_edge = frame.get_left()[0]
-            right_edge = frame.get_right()[0]
-            bottom_edge = frame.get_bottom()[1]
-            top_edge = frame.get_top()[1]
-            grid = VGroup()
-            for x_value in np.arange(left_edge, right_edge + ZERO_AXIS_EPSILON, cell_size):
-                line = Line(
-                    np.array([x_value, bottom_edge, 0.0]),
-                    np.array([x_value, top_edge, 0.0]),
-                )
-                line.set_stroke(
-                    C_GRID,
-                    width=GRID_LINE_STROKE_WIDTH,
-                    opacity=GRID_LINE_OPACITY,
-                )
-                grid.add(line)
-            for y_value in np.arange(bottom_edge, top_edge + ZERO_AXIS_EPSILON, cell_size):
-                line = Line(
-                    np.array([left_edge, y_value, 0.0]),
-                    np.array([right_edge, y_value, 0.0]),
-                )
-                line.set_stroke(
-                    C_GRID,
-                    width=GRID_LINE_STROKE_WIDTH,
-                    opacity=GRID_LINE_OPACITY,
-                )
-                grid.add(line)
-            grid.set_z_index(LAYER_CONTOUR)
-            mob.become(grid)
 
         def view_limits() -> tuple[float, float, float, float]:
             scale = view_scale_factor()
@@ -257,6 +210,45 @@ class SecondOrderApproximation(Slide):
                 + RIGHT * (frame.width * x_ratio)
                 + UP * (frame.height * y_ratio)
             )
+
+        grid_x_step = base_x_span / grid_col_count
+        grid_y_step = base_y_span / grid_row_count
+
+        def grid_values(anchor: float, step: float, lower: float, upper: float) -> FloatArray:
+            start = np.floor((lower - anchor) / step)
+            stop = np.ceil((upper - anchor) / step)
+            return anchor + np.arange(start, stop + 1) * step
+
+        def update_graph_grid(mob: VMobject) -> None:
+            view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
+            grid = VGroup()
+            for x_value in grid_values(x_min, grid_x_step, view_x_min, view_x_max):
+                line = Line(
+                    data_point(float(x_value), view_y_min),
+                    data_point(float(x_value), view_y_max),
+                )
+                line.set_stroke(
+                    C_GRID,
+                    width=GRID_LINE_STROKE_WIDTH,
+                    opacity=GRID_LINE_OPACITY,
+                )
+                grid.add(line)
+            for y_value in grid_values(y_min, grid_y_step, view_y_min, view_y_max):
+                line = Line(
+                    data_point(view_x_min, float(y_value)),
+                    data_point(view_x_max, float(y_value)),
+                )
+                line.set_stroke(
+                    C_GRID,
+                    width=GRID_LINE_STROKE_WIDTH,
+                    opacity=GRID_LINE_OPACITY,
+                )
+                grid.add(line)
+            grid.set_z_index(LAYER_CONTOUR)
+            mob.become(grid)
+
+        graph_grid = VGroup().set_z_index(LAYER_CONTOUR)
+        update_graph_grid(graph_grid)
 
         def curve_points(fn: Callable[[FloatArray], FloatArray]) -> list[FloatArray]:
             view_x_min, view_x_max, view_y_min, view_y_max = view_limits()
@@ -686,6 +678,55 @@ class SecondOrderApproximation(Slide):
         ) -> None:
             mob.add_updater(lambda tracked: update_x_marker(tracked, point_fn, color=color))
 
+        def color_formula(mob: VMobject) -> VMobject:
+            _color_text_parts(
+                mob,
+                {
+                    r"x_t": C_YELLOW,
+                    r"x_{t+1}": C_YELLOW,
+                    r"\alpha": C_BLUE,
+                    r"\beta": C_ORANGE,
+                    r"\delta": C_GREEN,
+                    r"\lambda_{\min}": C_BLUE,
+                    r"\lambda_{\max}": C_ORANGE,
+                    r"\kappa": C_PURPLE,
+                },
+            )
+            return mob
+
+        panel_background_color = C_PANEL_SOFT
+        alpha_eigen_note = color_formula(
+            theme_math(
+                r"\lambda_{\min}(\nabla^2 f(x))=\alpha",
+                color=C_TEXT,
+                typography="caption",
+            )
+        )
+        beta_eigen_note = color_formula(
+            theme_math(
+                r"\lambda_{\max}(\nabla^2 f(x))=\beta",
+                color=C_TEXT,
+                typography="caption",
+            )
+        )
+        kappa_note = color_formula(
+            theme_math(
+                r"\kappa=\frac{\beta}{\alpha}",
+                color=C_TEXT,
+                typography="caption",
+            )
+        )
+        curvature_reminders = ReminderStack(
+            [alpha_eigen_note],
+            width=left.width - 2 * SMALL_BUFF,
+            max_height=frame.height * LOCAL_LEGEND_FRAME_HEIGHT_RATIO,
+            orientation="horizontal",
+            adaptive=True,
+            fill_color=panel_background_color,
+        )
+        left.place(curvature_reminders, DL, buff=SMALL_BUFF)
+        left.update(bottom=curvature_reminders)
+
         alpha_marker = x_marker(alpha_minimum, color=C_BLUE)
         beta_marker = x_marker(beta_minimum, color=C_ORANGE)
         plot = VGroup(
@@ -713,22 +754,6 @@ class SecondOrderApproximation(Slide):
         )
         left.scale_and_place(plot, buff=SMALL_BUFF)
         right.update(left=plot)
-
-        def color_formula(mob: VMobject) -> VMobject:
-            _color_text_parts(
-                mob,
-                {
-                    r"x_t": C_YELLOW,
-                    r"x_{t+1}": C_YELLOW,
-                    r"\alpha": C_BLUE,
-                    r"\beta": C_ORANGE,
-                    r"\delta": C_GREEN,
-                    r"\lambda_{\min}": C_BLUE,
-                    r"\lambda_{\max}": C_ORANGE,
-                    r"\kappa": C_PURPLE,
-                },
-            )
-            return mob
 
         def plot_legend_entry(
             tex: str, *, color: str, width: float, dashed: bool = False
@@ -803,7 +828,6 @@ class SecondOrderApproximation(Slide):
             width=plot_legend.width + 2 * legend_box_buff,
             height=legend_background_heights[0],
         )
-        panel_background_color = C_PANEL_SOFT
         plot_legend_background.set_fill(panel_background_color, opacity=PANEL_FILL_OPACITY)
         plot_legend_background.set_stroke(
             C_FRAME,
@@ -862,27 +886,6 @@ class SecondOrderApproximation(Slide):
             tex_template=definition_template,
             font_size=definition_font_size,
         )
-        alpha_eigen_note = color_formula(
-            theme_math(
-                r"\lambda_{\min}(\nabla^2 f(x))=\alpha",
-                color=C_TEXT,
-                typography="caption",
-            )
-        )
-        beta_eigen_note = color_formula(
-            theme_math(
-                r"\lambda_{\max}(\nabla^2 f(x))=\beta",
-                color=C_TEXT,
-                typography="caption",
-            )
-        )
-        kappa_note = color_formula(
-            theme_math(
-                r"\kappa=\frac{\beta}{\alpha}",
-                color=C_TEXT,
-                typography="caption",
-            )
-        )
         color_substrings(
             alpha_definition,
             {r"x_t": C_YELLOW, r"\alpha": C_BLUE},
@@ -918,30 +921,20 @@ class SecondOrderApproximation(Slide):
             scale_kwargs={"max_scale": 1},
         )
 
-        curvature_reminders = ReminderStack(
-            [alpha_eigen_note],
-            width=left.width - 2 * SMALL_BUFF,
-            max_height=frame.height * LOCAL_LEGEND_FRAME_HEIGHT_RATIO,
-            orientation="horizontal",
-            adaptive=True,
-            fill_color=panel_background_color,
-        )
-        left.place(curvature_reminders, DL, buff=SMALL_BUFF)
-
         proof_separator = Line(
-            hessian_region.get_corner(DL),
-            hessian_region.get_corner(DR),
+            hessian_region.get_corner(DL) + RIGHT * SMALL_BUFF,
+            hessian_region.get_corner(DR) + LEFT * SMALL_BUFF,
         )
         proof_separator.set_stroke(
             C_FRAME,
             width=LOCAL_PANEL_STROKE_WIDTH,
             opacity=LOCAL_PANEL_STROKE_OPACITY,
         )
-        proof_separator.set_z_index(LAYER_MARKERS)
+        proof_separator.set_z_index(LAYER_MARKERS + 1)
 
         derivative_equation = color_formula(
             theme_math(
-                r"\nabla_\delta \tilde f(\delta)="
+                r"\nabla_\delta f_{apx}(\delta)="
                 r"\nabla f(x_t)+\nabla^2 f(x_t)\delta",
             )
         )
