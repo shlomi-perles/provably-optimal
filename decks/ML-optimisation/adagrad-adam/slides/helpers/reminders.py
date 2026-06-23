@@ -19,9 +19,12 @@ from manim import (
     FadeOut,
     Group,
     Line,
+    MathTex,
     Mobject,
     MoveToTarget,
     Rectangle,
+    Tex,
+    Text,
     VGroup,
     config,
 )
@@ -40,6 +43,7 @@ REMINDER_MAX_HEIGHT_FRACTION = 1/3
 REMINDER_INNER_BUFF = 2 * SMALL_BUFF
 REMINDER_HORIZONTAL_EXTRA_HEIGHT = SMALL_BUFF
 REMINDER_HORIZONTAL_HEIGHT_SCALE = 3 / 2
+REMINDER_DIVIDER_SCALE = 0.9
 REMINDER_ENTRY_SHIFT = UP * SMALL_BUFF
 REMINDER_CORNER_BUFF = SMALL_BUFF
 REMINDER_EPSILON = float(np.finfo(float).eps)
@@ -74,6 +78,7 @@ class ReminderStack(Group):
         corner: Sequence[float] | None = DL,
         orientation: ReminderOrientation = "vertical",
         adaptive: bool = False,
+        preserve_font_size: bool = True,
         inner_buff: float = REMINDER_INNER_BUFF,
         cell_buff: float = SMALL_BUFF,
         fill_color: str | None = None,
@@ -90,12 +95,14 @@ class ReminderStack(Group):
         if self.orientation not in ("vertical", "horizontal"):
             raise ValueError("orientation must be 'vertical' or 'horizontal'.")
         self.adaptive = adaptive
+        self.preserve_font_size = preserve_font_size
         self.inner_buff = inner_buff
         self.cell_buff = cell_buff
         self.fill_color = fill_color if fill_color is not None else theme.web_palette.surface
         self.frame_color = frame_color if frame_color is not None else theme.palette.accent
         self.divider_color = divider_color if divider_color is not None else C_MUTED
         self._natural_sizes: dict[int, tuple[float, float]] = {}
+        self._natural_font_sizes: dict[int, float] = {}
         self._fixed_height: float | None = None
 
         self.frame = Rectangle(
@@ -194,6 +201,8 @@ class ReminderStack(Group):
             if from_existing:
                 entry = reminder.copy()
                 self._natural_sizes[id(entry)] = self._natural_sizes[id(reminder)]
+                if id(reminder) in self._natural_font_sizes:
+                    self._natural_font_sizes[id(entry)] = self._natural_font_sizes[id(reminder)]
                 entry.move_to(reminder)
                 entry.set_z_index(LAYER_MARKERS + 2)
             else:
@@ -348,7 +357,25 @@ class ReminderStack(Group):
             )
             target.set_z_index(LAYER_MARKERS + 2)
             targets.append(target)
+        if self.preserve_font_size:
+            self._match_target_font_sizes(targets)
         return targets
+
+    @staticmethod
+    def _match_target_font_sizes(targets: Sequence[Mobject]) -> None:
+        text_targets = [
+            target
+            for target in targets
+            if ReminderStack._has_preserved_font_size(target)
+        ]
+        if len(text_targets) < 2:
+            return
+
+        font_size = min(float(target.font_size) for target in text_targets)
+        for target in text_targets:
+            center = target.get_center()
+            target.font_size = font_size
+            target.move_to(center)
 
     @staticmethod
     def _apply_entry_target(entry: Mobject, target: Mobject) -> None:
@@ -365,21 +392,21 @@ class ReminderStack(Group):
         if len(cells) < 2:
             return VGroup()
 
-        divider_region = self._divider_region_for(frame)
         dividers = VGroup()
         for cell in cells[:-1]:
             if self.orientation == "horizontal":
                 divider_x = cell.right
                 divider = Line(
-                    np.array([divider_x, divider_region.bottom, 0.0]),
-                    np.array([divider_x, divider_region.top, 0.0]),
+                    np.array([divider_x, frame.get_bottom()[1], 0.0]),
+                    np.array([divider_x, frame.get_top()[1], 0.0]),
                 )
             else:
                 divider_y = cell.bottom
                 divider = Line(
-                    np.array([divider_region.left, divider_y, 0.0]),
-                    np.array([divider_region.right, divider_y, 0.0]),
+                    np.array([frame.get_left()[0], divider_y, 0.0]),
+                    np.array([frame.get_right()[0], divider_y, 0.0]),
                 )
+            divider.scale(REMINDER_DIVIDER_SCALE)
             divider.set_stroke(
                 self.divider_color,
                 width=PANEL_STROKE_WIDTH,
@@ -428,17 +455,6 @@ class ReminderStack(Group):
             )
         return self._horizontal_inset_region_for(frame)
 
-    def _divider_region_for(self, frame: Mobject) -> Region:
-        if self.orientation == "horizontal":
-            inset = self._divider_vertical_inset_for(frame)
-            return Region(
-                top=frame.get_top()[1] - inset,
-                bottom=frame.get_bottom()[1] + inset,
-                left=frame.get_left()[0],
-                right=frame.get_right()[0],
-            )
-        return self._horizontal_inset_region_for(frame)
-
     def _horizontal_inset_region_for(self, frame: Mobject) -> Region:
         return Region(
             top=frame.get_top()[1],
@@ -446,9 +462,6 @@ class ReminderStack(Group):
             left=frame.get_left()[0] + self.inner_buff,
             right=frame.get_right()[0] - self.inner_buff,
         )
-
-    def _divider_vertical_inset_for(self, frame: Mobject) -> float:
-        return max(min(self.inner_buff, frame.height / 2 - REMINDER_EPSILON), 0)
 
     def _entry_shift(self) -> np.ndarray:
         if self.orientation == "horizontal":
@@ -481,17 +494,26 @@ class ReminderStack(Group):
         entries: Sequence[Mobject],
         content_width: float,
     ) -> tuple[list[float], list[float]]:
-        widths = []
-        heights = []
+        scales = []
         for entry in entries:
-            natural_width, natural_height = self._natural_sizes[id(entry)]
-            width_scale = min(content_width / natural_width, 1)
-            widths.append(natural_width * width_scale)
-            heights.append(natural_height * width_scale)
+            natural_width, _natural_height = self._natural_sizes[id(entry)]
+            scales.append(min(content_width / natural_width, 1))
+        heights = [
+            self._natural_height(entry) * scale
+            for entry, scale in zip(entries, scales, strict=True)
+        ]
         height_scale = self._vertical_height_scale_for(entries, heights)
+        scales = [scale * height_scale for scale in scales]
+        scales = self._preserved_font_size_scales_for(entries, scales)
         return (
-            [width * height_scale for width in widths],
-            [height * height_scale for height in heights],
+            [
+                self._natural_width(entry) * scale
+                for entry, scale in zip(entries, scales, strict=True)
+            ],
+            [
+                self._natural_height(entry) * scale
+                for entry, scale in zip(entries, scales, strict=True)
+            ],
         )
 
     def _horizontal_entry_scales_for(self, entries: Sequence[Mobject]) -> list[float]:
@@ -506,9 +528,37 @@ class ReminderStack(Group):
         ]
         width_scale = self._available_horizontal_content_width(len(entries)) / sum(content_widths)
         shared_width_scale = max(min(width_scale, 1), REMINDER_EPSILON)
-        return [
+        scales = [
             max(height_scale * shared_width_scale, REMINDER_EPSILON)
             for height_scale in height_scales
+        ]
+        return self._preserved_font_size_scales_for(entries, scales)
+
+    def _preserved_font_size_scales_for(
+        self,
+        entries: Sequence[Mobject],
+        scales: Sequence[float],
+    ) -> list[float]:
+        if not self.preserve_font_size:
+            return list(scales)
+
+        text_entries = [
+            (entry, scale)
+            for entry, scale in zip(entries, scales, strict=True)
+            if id(entry) in self._natural_font_sizes
+        ]
+        if len(text_entries) < 2:
+            return list(scales)
+
+        font_size = min(
+            self._natural_font_sizes[id(entry)] * scale
+            for entry, scale in text_entries
+        )
+        return [
+            font_size / self._natural_font_sizes[id(entry)]
+            if id(entry) in self._natural_font_sizes
+            else scale
+            for entry, scale in zip(entries, scales, strict=True)
         ]
 
     def _vertical_height_scale_for(
@@ -542,11 +592,20 @@ class ReminderStack(Group):
             max(reminder.width, REMINDER_EPSILON),
             max(reminder.height, REMINDER_EPSILON),
         )
+        if self._has_preserved_font_size(reminder):
+            self._natural_font_sizes[id(reminder)] = max(float(reminder.font_size), REMINDER_EPSILON)
 
     def _restore_natural_size(self, target: Mobject, entry: Mobject) -> None:
+        if self._has_preserved_font_size(target) and id(entry) in self._natural_font_sizes:
+            target.font_size = self._natural_font_sizes[id(entry)]
+            return
         _natural_width, natural_height = self._natural_sizes[id(entry)]
         if target.height > REMINDER_EPSILON:
             target.scale(natural_height / target.height)
+
+    @staticmethod
+    def _has_preserved_font_size(mobject: Mobject) -> bool:
+        return isinstance(mobject, (Tex, Text, MathTex))
 
     def _entry_from_index_or_mobject(self, reminder: int | Mobject) -> Mobject:
         if isinstance(reminder, int):
