@@ -324,8 +324,10 @@ class ReminderStack(Group):
     def _horizontal_frame_height_for(self, entries: Sequence[Mobject]) -> float:
         if len(entries) == 0:
             return 2 * self.cell_buff
-        scale = self._horizontal_entry_scale_for(entries)
-        content_height = max(self._natural_height(entry) for entry in entries) * scale
+        scales = self._horizontal_entry_scales_for(entries)
+        content_height = max(
+            self._natural_height(entry) * scale for entry, scale in zip(entries, scales, strict=True)
+        )
         return max(content_height + 2 * self.cell_buff, 2 * self.cell_buff)
 
     def _entry_targets(self, entries: Iterable[Mobject], frame: Mobject) -> list[Mobject]:
@@ -453,8 +455,10 @@ class ReminderStack(Group):
         return max(frame_width - 2 * self.inner_buff, REMINDER_EPSILON)
 
     def _horizontal_cell_widths_for(self, entries: Sequence[Mobject]) -> list[float]:
-        scale = self._horizontal_entry_scale_for(entries)
-        return [self._natural_width(entry) * scale + 2 * self.cell_buff for entry in entries]
+        return [
+            self._natural_width(entry) * scale + 2 * self.cell_buff
+            for entry, scale in zip(entries, self._horizontal_entry_scales_for(entries), strict=True)
+        ]
 
     def _vertical_cell_heights_for(
         self,
@@ -485,12 +489,22 @@ class ReminderStack(Group):
             [height * height_scale for height in heights],
         )
 
-    def _horizontal_entry_scale_for(self, entries: Sequence[Mobject]) -> float:
-        total_content_width = sum(self._natural_width(entry) for entry in entries)
-        max_content_height = max(self._natural_height(entry) for entry in entries)
-        width_scale = self._available_horizontal_content_width(len(entries)) / total_content_width
-        height_scale = self._available_horizontal_content_height() / max_content_height
-        return max(min(width_scale, height_scale, 1), REMINDER_EPSILON)
+    def _horizontal_entry_scales_for(self, entries: Sequence[Mobject]) -> list[float]:
+        available_height = self._available_horizontal_content_height()
+        height_scales = [
+            min(available_height / self._natural_height(entry), 1)
+            for entry in entries
+        ]
+        content_widths = [
+            self._natural_width(entry) * scale
+            for entry, scale in zip(entries, height_scales, strict=True)
+        ]
+        width_scale = self._available_horizontal_content_width(len(entries)) / sum(content_widths)
+        shared_width_scale = max(min(width_scale, 1), REMINDER_EPSILON)
+        return [
+            max(height_scale * shared_width_scale, REMINDER_EPSILON)
+            for height_scale in height_scales
+        ]
 
     def _vertical_height_scale_for(
         self,
