@@ -65,8 +65,10 @@ GRADIENT_DESCENT_LEARNING_RATE = BEALE_LEARNING_RATE / 2
 BEALE_MOMENTUM = 0.65
 BEALE_STEPS = 3
 FINITE_DIFFERENCE_STEP = 1e-2
-ADAGRAD_START_POINT = np.array([0.42, -5.7], dtype=np.float64)
-ADAGRAD_EPSILON = FINITE_DIFFERENCE_STEP**2
+ADAGRAD_START_POINT = np.array([0.36, -4.7], dtype=np.float64)
+ADAGRAD_LEARNING_RATE = 0.9
+ADAGRAD_INITIAL_ACCUMULATOR = 0.1
+ADAGRAD_WARMUP_STEPS = 2
 
 DOMAIN_LIMIT = BEALE_LIMIT + BEALE_PAD_THICKNESS
 PAD_HEIGHT = BEALE_Z_MAX * BEALE_SCALE
@@ -89,7 +91,7 @@ MARKER_Z_LIFT = 0.24
 MODEL_CAP_LIFT = 0.3
 GRADIENT_DESCENT_MODEL_CAP_LIFT = MODEL_CAP_LIFT
 GRADIENT_DESCENT_MODEL_OPACITIES: tuple[float | None, ...] = (None,) * BEALE_STEPS
-ADAGRAD_MODEL_CAP_LIFT = MODEL_CAP_LIFT
+ADAGRAD_MODEL_CAP_LIFT = 2.4
 ADAGRAD_MODEL_OPACITIES: tuple[float | None, ...] = (None,)
 LABEL_XY_OFFSETS = np.array(
     [
@@ -111,9 +113,11 @@ AXIS_STROKE_WIDTH = 2.0
 AXIS_LABEL_INSET_TO_DOMAIN = 0.16
 AXIS_LABEL_SIDE_TO_DOMAIN = 0.42
 AXIS_Z_LABEL_HEIGHT_TO_RANGE = 0.68
-CAMERA_INITIAL_PHI = (90 - 37.5) * DEGREES
+CAMERA_INITIAL_ELEVATION = (37.5 + 180) * DEGREES
+CAMERA_FINAL_ELEVATION = (27.7 + 180) * DEGREES
+CAMERA_INITIAL_PHI = 90 * DEGREES - CAMERA_INITIAL_ELEVATION
 CAMERA_INITIAL_THETA = -67.4 * DEGREES
-CAMERA_FINAL_PHI = (90 - 27.7) * DEGREES
+CAMERA_FINAL_PHI = 90 * DEGREES - CAMERA_FINAL_ELEVATION
 CAMERA_FINAL_THETA = -28.5 * DEGREES
 ADAGRAD_CAMERA_INITIAL_PHI = 54 * DEGREES
 ADAGRAD_CAMERA_INITIAL_THETA = -46 * DEGREES
@@ -127,6 +131,7 @@ COLOR_BAR_HEIGHT_TO_Z_AXIS = 0.9
 PATH_DOT_RADIUS_TO_Z_AXIS = 1 / 34
 PATH_DOT_RESOLUTION = (16, 16)
 PATH_LINE_THICKNESS_TO_DOT_RADIUS = 0.34
+PATH_LINE_SAMPLES = round(BEALE_GRID_POINTS / 10)
 HUD_Z_INDEX = 20
 
 
@@ -244,15 +249,49 @@ def _simulate_gradient_descent_steps() -> FloatArray:
     return np.asarray(points, dtype=np.float64)
 
 
-def _adagrad_gradient_and_scale(point: FloatArray) -> tuple[FloatArray, FloatArray]:
-    gradient = _gradient_at(point)
-    return gradient, np.sqrt(gradient**2 + ADAGRAD_EPSILON)
+def _simulate_adagrad_steps() -> tuple[FloatArray, list[FloatArray]]:
+    point = ADAGRAD_START_POINT.copy()
+    accumulator = np.full(2, ADAGRAD_INITIAL_ACCUMULATOR, dtype=np.float64)
+    points = [point.copy()]
+    accumulators = [accumulator.copy()]
+    for _ in range(ADAGRAD_WARMUP_STEPS + 1):
+        gradient = _gradient_at(point)
+        accumulator = accumulator + gradient**2
+        point = point - ADAGRAD_LEARNING_RATE * gradient / np.sqrt(accumulator)
+        points.append(point.copy())
+        accumulators.append(accumulator.copy())
+    return np.asarray(points, dtype=np.float64), accumulators
 
 
-def _simulate_adagrad_step() -> FloatArray:
-    gradient, scale = _adagrad_gradient_and_scale(ADAGRAD_START_POINT)
-    next_point = ADAGRAD_START_POINT - BEALE_LEARNING_RATE * gradient / scale
-    return np.asarray([ADAGRAD_START_POINT, next_point], dtype=np.float64)
+@dataclass(frozen=True, slots=True)
+class AdaGradModel:
+    step_points: FloatArray
+    base_height: float
+    gradient: FloatArray
+    preconditioner: FloatArray
+    minimum_height: float
+    cap_height: float
+
+
+def _make_adagrad_model() -> AdaGradModel:
+    points, accumulators = _simulate_adagrad_steps()
+    base_index = ADAGRAD_WARMUP_STEPS
+    base_point = points[base_index]
+    base_height = _displayed_beale_height(base_point)
+    gradient = _gradient_at(base_point)
+    preconditioner = np.sqrt(accumulators[base_index + 1])
+    minimizer = base_point - ADAGRAD_LEARNING_RATE * gradient / preconditioner
+    minimum_height = float(
+        base_height - 0.5 * ADAGRAD_LEARNING_RATE * np.sum(gradient**2 / preconditioner)
+    )
+    return AdaGradModel(
+        step_points=np.asarray([base_point, minimizer], dtype=np.float64),
+        base_height=base_height,
+        gradient=gradient,
+        preconditioner=preconditioner,
+        minimum_height=minimum_height,
+        cap_height=base_height + ADAGRAD_MODEL_CAP_LIFT,
+    )
 
 
 def _make_plot_data(
@@ -462,6 +501,15 @@ class BealesPlot(ThreeDSlide):
             axes.c2p(float(point[0]), float(point[1]), float(height))
             for point, height in zip(data.visible_points, data.marker_heights, strict=True)
         ]
+        path_line_points: list[FloatArray] = []
+        for start, end in pairwise(data.visible_points):
+            for alpha in np.linspace(0.0, 1.0, PATH_LINE_SAMPLES):
+                point = (1.0 - alpha) * start + alpha * end
+                height = _displayed_beale_height(point) + MARKER_Z_LIFT
+                path_line_points.append(
+                    axes.c2p(float(point[0]), float(point[1]), float(height))
+                )
+
         dot_radius = axes.z_axis.get_length() * PATH_DOT_RADIUS_TO_Z_AXIS
         line_thickness = dot_radius * PATH_LINE_THICKNESS_TO_DOT_RADIUS
         dots = Group(
@@ -478,7 +526,7 @@ class BealesPlot(ThreeDSlide):
         lines = Group(
             *(
                 Line3D(start, end, color=self.path_color, thickness=line_thickness)
-                for start, end in pairwise(path_points)
+                for start, end in pairwise(path_line_points)
             )
         )
         return lines, dots
@@ -613,22 +661,22 @@ class BealesAdaGradPlot(BealesPlot):
     label_texts = (r"x_t", r"x_{t+1}")
     model_cap_lift = ADAGRAD_MODEL_CAP_LIFT
     model_opacities = ADAGRAD_MODEL_OPACITIES
+    model_learning_rate = ADAGRAD_LEARNING_RATE
     patch_resolution = GRADIENT_DESCENT_PATCH_RESOLUTION
-    path_color = C_TEAL
+    path_color = C_ORANGE
     camera_initial_phi = ADAGRAD_CAMERA_INITIAL_PHI
     camera_initial_theta = ADAGRAD_CAMERA_INITIAL_THETA
     camera_final_phi = ADAGRAD_CAMERA_FINAL_PHI
     camera_final_theta = ADAGRAD_CAMERA_FINAL_THETA
 
     def _trajectory_points(self) -> FloatArray:
-        return _simulate_adagrad_step()
+        return _make_adagrad_model().step_points
 
     def _make_plot_data(self) -> BealePlotData:
-        gradient, scale = _adagrad_gradient_and_scale(ADAGRAD_START_POINT)
-        inverse_scale = np.divide(1.0, scale)
-        cap_delta = 0.5 * BEALE_LEARNING_RATE * float(gradient @ (inverse_scale * gradient))
+        model = _make_adagrad_model()
+        cap_delta = model.cap_height - model.minimum_height
         return _make_plot_data(
-            self._trajectory_points(),
+            model.step_points,
             model_cap_lift=self.model_cap_lift,
             model_opacities=self.model_opacities,
             model_learning_rate=self.model_learning_rate,
@@ -636,12 +684,12 @@ class BealesAdaGradPlot(BealesPlot):
         )
 
     def _make_patch(self, axes: ThreeDAxes, spec: ModelPatchSpec) -> ScalarFieldSurface:
-        _, scale = _adagrad_gradient_and_scale(ADAGRAD_START_POINT)
-        inverse_sqrt_scale = np.divide(1.0, np.sqrt(scale))
+        model = _make_adagrad_model()
+        inverse_sqrt_preconditioner = np.divide(1.0, np.sqrt(model.preconditioner))
 
         def patch_point(local_radius: float, angle: float) -> FloatArray:
             local = local_radius * np.array([np.cos(angle), np.sin(angle)], dtype=np.float64)
-            xy = spec.center + inverse_sqrt_scale * local
+            xy = spec.center + inverse_sqrt_preconditioner * local
             height = spec.min_height + 0.5 * local_radius**2 / spec.learning_rate
             return axes.c2p(float(xy[0]), float(xy[1]), float(height))
 
