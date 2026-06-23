@@ -7,11 +7,20 @@ from simplex.engine.region import Region
 
 from slides.helpers.figure_helpers import *
 from slides.helpers.reminders import ReminderStack
+from slides.helpers.second_order import (
+    color_formula,
+    definition_page,
+    definition_panel,
+    definition_template,
+    gradient,
+    objective,
+    quadratic_model,
+    second_order_data,
+    style_panel,
+)
 from slides.helpers.style import (
     C_PANEL_SOFT,
     PANEL_CORNER_RADIUS,
-    PANEL_FILL_OPACITY,
-    PANEL_STROKE_OPACITY,
     PANEL_STROKE_WIDTH,
 )
 
@@ -23,155 +32,27 @@ class SecondOrderApproximation(Slide):
         title = _start_slide(self, "Second-order approximation")
         left, right = _split_weighted(self.region, [1.72, 1.0])
 
-        alpha_anchor = VT(LOCAL_CURRENT_X)
-        beta_anchor = VT(LOCAL_CURRENT_X)
+        data = second_order_data()
+        alpha_anchor = VT(data.x_t)
+        beta_anchor = VT(data.x_t)
         view_scale = VT(1.0)
-        center = LOCAL_MODEL_CENTER
-        x_t = LOCAL_CURRENT_X
-
-        def f(xs: FloatArray) -> FloatArray:
-            return (
-                LOCAL_QUARTIC_WEIGHT * (xs - center) ** 4
-                + LOCAL_QUADRATIC_WEIGHT * (xs - LOCAL_QUADRATIC_CENTER) ** 2
-                + LOCAL_VALUE_OFFSET
-            )
-
-        def grad(x: float) -> float:
-            return 4 * LOCAL_QUARTIC_WEIGHT * (x - center) ** 3 + 2 * LOCAL_QUADRATIC_WEIGHT * (
-                x - LOCAL_QUADRATIC_CENTER
-            )
-
-        def hess(x: float) -> float:
-            return 12 * LOCAL_QUARTIC_WEIGHT * (x - center) ** 2 + 2 * LOCAL_QUADRATIC_WEIGHT
-
-        def f_scalar(x: float) -> float:
-            return float(f(np.array([x]))[0])
-
-        def model_values(values: FloatArray, anchor: float, curvature: float) -> FloatArray:
-            return (
-                f_scalar(anchor)
-                + grad(anchor) * (values - anchor)
-                + 0.5 * curvature * (values - anchor) ** 2
-            )
-
-        f_t = float(f(np.array([x_t]))[0])
-        g_t = grad(x_t)
-        h_t = hess(x_t)
-        x_next = x_t - g_t / h_t
-        y_next = float(model_values(np.array([x_next]), x_t, h_t)[0])
-        roots = np.roots(
-            [
-                4 * LOCAL_QUARTIC_WEIGHT,
-                -12 * LOCAL_QUARTIC_WEIGHT * center,
-                12 * LOCAL_QUARTIC_WEIGHT * center**2 + 2 * LOCAL_QUADRATIC_WEIGHT,
-                -(4 * LOCAL_QUARTIC_WEIGHT * center**3)
-                - 2 * LOCAL_QUADRATIC_WEIGHT * LOCAL_QUADRATIC_CENTER,
-            ]
-        )
-        x_star = min(
-            (root.real for root in roots if abs(root.imag) < ZERO_AXIS_EPSILON),
-            key=lambda x: f(np.array([x]))[0],
-        )
-        f_star = float(f(np.array([x_star]))[0])
-        x_min, x_max, x_step = LOCAL_X_RANGE
-        base_x_span = x_max - x_min
-        calibration_alpha_sweep_x = float(x_star + 2 * abs(x_star - x_t))
-        calibration_beta_sweep_x = float(x_star + abs(x_star - x_t))
-        calibration_view_sweep_x = max(calibration_alpha_sweep_x, calibration_beta_sweep_x)
-        alpha_sweep_x = float(x_star + 5)
-        beta_sweep_x = float(x_star + 8)
-        beta_left_sweep_x = x_t - 3
-        zoom_anchor_x = float(x_star)
-        zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
-        zoom_padding = x_step / 2
-        calibration_zoom_out_scale = max(
-            1.0,
-            (calibration_view_sweep_x + zoom_padding - zoom_anchor_x)
-            / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
-            (zoom_anchor_x - min(x_min, x_t) + zoom_padding)
-            / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
-        )
-        zoom_out_scale = 2 * calibration_zoom_out_scale
-        calibration_zoom_x_span = base_x_span * calibration_zoom_out_scale
-        calibration_zoom_x_min = zoom_anchor_x - zoom_anchor_x_ratio * calibration_zoom_x_span
-        calibration_zoom_x_max = calibration_zoom_x_min + calibration_zoom_x_span
-        curvature_domain = np.linspace(
-            min(
-                x_min,
-                calibration_zoom_x_min,
-                x_t,
-                calibration_alpha_sweep_x,
-                calibration_beta_sweep_x,
-            ),
-            max(
-                x_max,
-                calibration_zoom_x_max,
-                x_t,
-                calibration_alpha_sweep_x,
-                calibration_beta_sweep_x,
-            ),
-            LOCAL_CURVE_SAMPLES,
-        )
-        sweep_endpoints = (x_t, calibration_alpha_sweep_x, calibration_beta_sweep_x)
-        curvature_anchor_count = max(
-            len(sweep_endpoints),
-            LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT,
-        )
-        curvature_anchor_values = np.linspace(
-            min(sweep_endpoints),
-            max(sweep_endpoints),
-            curvature_anchor_count,
-        )
-
-        def curvature_bounds_for_anchor(anchor: float) -> tuple[float, float]:
-            deltas = curvature_domain - anchor
-            mask = np.abs(deltas) > ZERO_AXIS_EPSILON
-            required_curvatures = (
-                2
-                * (f(curvature_domain[mask]) - f_scalar(anchor) - grad(anchor) * deltas[mask])
-                / deltas[mask] ** 2
-            )
-            return (
-                min(hess(anchor), float(np.min(required_curvatures))),
-                max(hess(anchor), float(np.max(required_curvatures))),
-            )
-
-        hessian_domain_min = min(
-            float(curvature_domain[0]),
-            float(curvature_domain[-1]),
-        )
-        hessian_domain_max = max(
-            float(curvature_domain[0]),
-            float(curvature_domain[-1]),
-        )
-        hessian_candidates = [hessian_domain_min, hessian_domain_max]
-        if hessian_domain_min <= center <= hessian_domain_max:
-            hessian_candidates.append(center)
-        curvature_bounds = [
-            curvature_bounds_for_anchor(anchor) for anchor in curvature_anchor_values
-        ]
-        alpha_target = float(
-            min(
-                min(lower_bound for lower_bound, _ in curvature_bounds),
-                min(hess(candidate) for candidate in hessian_candidates),
-            )
-        )
-        beta_target = float(max(upper_bound for _, upper_bound in curvature_bounds))
-        alpha = VT(alpha_target)
-        beta = VT(beta_target)
-        xs = np.linspace(x_min, x_max, LOCAL_CURVE_SAMPLES)
-        dx = xs - x_t
-        fixed_lower = f_t + g_t * dx + 0.5 * alpha_target * dx**2
-        fixed_upper = f_t + g_t * dx + 0.5 * beta_target * dx**2
-        fixed_local = f_t + g_t * dx + 0.5 * h_t * dx**2
-        y_min = (
-            min(float(np.min(fixed_lower)), float(np.min(fixed_local)), float(np.min(f(xs))))
-            - LOCAL_Y_PADDING_BELOW
-        )
-        y_max = min(
-            max(float(np.max(f(xs))), float(np.max(fixed_upper))) + LOCAL_Y_PADDING_ABOVE,
-            LOCAL_Y_MAX_CAP,
-        )
+        alpha = VT(data.alpha_target)
+        beta = VT(data.beta_target)
+        x_t = data.x_t
+        f_t = data.f_t
+        x_next = data.x_next
+        y_next = data.y_next
+        x_star = data.x_star
+        f_star = data.f_star
+        x_min, x_max, x_step = data.x_min, data.x_max, data.x_step
+        y_min, y_max = data.y_min, data.y_max
+        base_x_span = data.x_span
+        zoom_anchor_x = data.x_star
+        zoom_anchor_x_ratio = data.zoom_anchor_x_ratio
+        zoom_out_scale = data.zoom_out_scale
+        alpha_sweep_x = data.alpha_sweep_x
+        beta_sweep_x = data.beta_sweep_x
+        beta_left_sweep_x = data.beta_left_sweep_x
 
         grid_row_count = max(1, round(LOCAL_AXIS_Y_LENGTH / MED_LARGE_BUFF))
         grid_col_count = max(1, round(grid_row_count * LOCAL_AXIS_X_LENGTH / LOCAL_AXIS_Y_LENGTH))
@@ -400,15 +281,15 @@ class SecondOrderApproximation(Slide):
             )
 
         def local_model_values(values: FloatArray) -> FloatArray:
-            return model_values(values, x_t, h_t)
+            return quadratic_model(values, x_t, data.h_t)
 
         def lower_model_values(values: FloatArray) -> FloatArray:
-            return model_values(values, float(~alpha_anchor), float(~alpha))
+            return quadratic_model(values, float(~alpha_anchor), float(~alpha))
 
         def upper_model_values(values: FloatArray) -> FloatArray:
-            return model_values(values, float(~beta_anchor), float(~beta))
+            return quadratic_model(values, float(~beta_anchor), float(~beta))
 
-        true_curve = curve_for(f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
+        true_curve = curve_for(objective, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
         local_model = dashed_curve_for(
             local_model_values,
             color=C_GREEN,
@@ -650,15 +531,15 @@ class SecondOrderApproximation(Slide):
         def alpha_minimum() -> tuple[float, float]:
             value = max(float(~alpha), ZERO_AXIS_EPSILON)
             anchor = float(~alpha_anchor)
-            x_alpha = anchor - grad(anchor) / value
-            y_alpha = float(model_values(np.array([x_alpha]), anchor, value)[0])
+            x_alpha = anchor - gradient(anchor) / value
+            y_alpha = float(quadratic_model(np.array([x_alpha]), anchor, value)[0])
             return float(x_alpha), float(y_alpha)
 
         def beta_minimum() -> tuple[float, float]:
             value = max(float(~beta), ZERO_AXIS_EPSILON)
             anchor = float(~beta_anchor)
-            x_beta = anchor - grad(anchor) / value
-            y_beta = float(model_values(np.array([x_beta]), anchor, value)[0])
+            x_beta = anchor - gradient(anchor) / value
+            y_beta = float(quadratic_model(np.array([x_beta]), anchor, value)[0])
             return float(x_beta), float(y_beta)
 
         def update_x_marker(
@@ -697,23 +578,6 @@ class SecondOrderApproximation(Slide):
         ) -> None:
             mob.add_updater(lambda tracked: update_x_marker(tracked, point_fn, color=color))
 
-        def color_formula(mob: VMobject) -> VMobject:
-            _color_text_parts(
-                mob,
-                {
-                    r"x_t": C_YELLOW,
-                    r"x_{t+1}": C_YELLOW,
-                    r"\alpha": C_BLUE,
-                    r"\beta": C_ORANGE,
-                    r"\delta": C_GREEN,
-                    r"\lambda_{\min}": C_BLUE,
-                    r"\lambda_{\max}": C_ORANGE,
-                    r"\kappa": C_PURPLE,
-                },
-            )
-            return mob
-
-        panel_background_color = C_PANEL_SOFT
         alpha_eigen_note = color_formula(
             theme_math(
                 r"\lambda_{\min}(\nabla^2 f(x))=\alpha",
@@ -741,7 +605,7 @@ class SecondOrderApproximation(Slide):
             max_height=frame.height * LOCAL_LEGEND_FRAME_HEIGHT_RATIO,
             orientation="horizontal",
             adaptive=True,
-            fill_color=panel_background_color,
+            fill_color=C_PANEL_SOFT,
         )
         left.place(curvature_reminders, DL, buff=SMALL_BUFF)
         left.update(bottom=curvature_reminders)
@@ -847,14 +711,8 @@ class SecondOrderApproximation(Slide):
             width=plot_legend.width + 2 * legend_box_buff,
             height=legend_background_heights[0],
         )
-        plot_legend_background.set_fill(panel_background_color, opacity=PANEL_FILL_OPACITY)
-        plot_legend_background.set_stroke(
-            C_FRAME,
-            width=PANEL_STROKE_WIDTH,
-            opacity=PANEL_STROKE_OPACITY,
-        )
+        style_panel(plot_legend_background)
         plot_legend_background.move_to(legend_background_top, aligned_edge=UP)
-        plot_legend_background.set_z_index(LAYER_MARKERS)
         plot_legend.set_z_index(LAYER_MARKERS + 1)
         plot.add(plot_legend_background, plot_legend)
 
@@ -875,35 +733,20 @@ class SecondOrderApproximation(Slide):
         hessian_equation_top = hessian_equation.copy()
         hessian_region.scale_and_place(hessian_equation_top, buff=MED_SMALL_BUFF)
 
-        definition_template = TexTemplate()
-        definition_template.add_to_preamble(r"\usepackage{amsthm}")
-        definition_template.add_to_preamble(
-            r"\theoremstyle{definition}\newtheorem*{definition}{Definition}"
-        )
-        definition_font_size = get_active_theme().typography.caption
-        alpha_definition = TexPage(
-            r"\begin{definition}[$\alpha$-strong convexity]"
-            r"\["
+        definition_tex_template = definition_template()
+        alpha_definition = definition_page(
+            r"$\alpha$-strong convexity",
             r"f(x)\ge f(x_t)+\left\langle\nabla f(x_t),x-x_t\right\rangle"
-            r"+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2"
-            r"\]"
-            r"\end{definition}",
-            page_width=definition_region,
-            buff=SMALL_BUFF,
-            tex_template=definition_template,
-            font_size=definition_font_size,
+            r"+\frac{\alpha}{2}\left\|x-x_t\right\|_2^2",
+            definition_region,
+            tex_template=definition_tex_template,
         )
-        beta_definition = TexPage(
-            r"\begin{definition}[$\beta$-smoothness]"
-            r"\["
+        beta_definition = definition_page(
+            r"$\beta$-smoothness",
             r"f(x)\le f(x_t)+\left\langle\nabla f(x_t),x-x_t\right\rangle"
-            r"+\frac{\beta}{2}\left\|x-x_t\right\|_2^2"
-            r"\]"
-            r"\end{definition}",
-            page_width=definition_region,
-            buff=SMALL_BUFF,
-            tex_template=definition_template,
-            font_size=definition_font_size,
+            r"+\frac{\beta}{2}\left\|x-x_t\right\|_2^2",
+            definition_region,
+            tex_template=definition_tex_template,
         )
         color_substrings(
             alpha_definition,
@@ -920,22 +763,11 @@ class SecondOrderApproximation(Slide):
             aligned_edge=LEFT,
             buff=MED_LARGE_BUFF,
         )
-        definition_background = SurroundingRectangle(
-            definition_stack,
-            buff=SMALL_BUFF,
-            corner_radius=PANEL_CORNER_RADIUS,
-        )
-        definition_background.set_fill(panel_background_color, opacity=PANEL_FILL_OPACITY)
-        definition_background.set_stroke(
-            C_FRAME,
-            width=PANEL_STROKE_WIDTH,
-            opacity=PANEL_STROKE_OPACITY,
-        )
-        definition_background.set_z_index(LAYER_MARKERS)
+        definition_background = definition_panel(definition_stack)
         definition_stack.set_z_index(LAYER_MARKERS + 1)
-        definition_panel = VGroup(definition_background, definition_stack)
+        definitions_group = VGroup(definition_background, definition_stack)
         definition_region.scale_and_place(
-            definition_panel,
+            definitions_group,
             buff=MED_SMALL_BUFF,
             scale_kwargs={"max_scale": 1},
         )
@@ -1061,7 +893,7 @@ class SecondOrderApproximation(Slide):
         )
 
         def track_plot_view() -> None:
-            track_curve(true_curve, f, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
+            track_curve(true_curve, objective, color=C_TEXT, width=LOCAL_CURVE_STROKE_WIDTH)
             track_dashed_curve(
                 local_model,
                 local_model_values,
@@ -1115,6 +947,29 @@ class SecondOrderApproximation(Slide):
             for mob in plot_view_mobjects:
                 mob.update(0)
 
+        def play_view_scale(target: float) -> None:
+            track_plot_view()
+            self.play(view_scale @ target)
+            refresh_plot_view()
+            clear_plot_view_updaters()
+
+        def track_bound_model(
+            curve: VMobject,
+            values_fn: Callable[[FloatArray], FloatArray],
+            marker: VGroup,
+            point_fn: Callable[[], tuple[float, float]],
+            *,
+            color: str,
+        ) -> None:
+            track_curve(
+                curve,
+                values_fn,
+                color=color,
+                width=LOCAL_BOUND_STROKE_WIDTH,
+                opacity=LOCAL_BOUND_OPACITY,
+            )
+            track_x_marker(marker, point_fn, color=color)
+
         self.play(
             Write(title),
             Write(frame),
@@ -1161,34 +1016,29 @@ class SecondOrderApproximation(Slide):
         )
         self.next_slide()
 
-        track_plot_view()
-        self.play(view_scale @ zoom_out_scale)
-        refresh_plot_view()
-        clear_plot_view_updaters()
+        play_view_scale(zoom_out_scale)
         self.next_slide()
 
-        track_curve(
+        track_bound_model(
             lower_model,
             lower_model_values,
+            alpha_marker,
+            alpha_minimum,
             color=C_BLUE,
-            width=LOCAL_BOUND_STROKE_WIDTH,
-            opacity=LOCAL_BOUND_OPACITY,
         )
-        track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
         self.play(alpha_anchor @ alpha_sweep_x, run_time=2)
         self.play(alpha_anchor @ x_t, run_time=2)
         self.next_slide()
 
         for mob in (lower_model, alpha_marker):
             mob.clear_updaters()
-        track_curve(
+        track_bound_model(
             upper_model,
             upper_model_values,
+            beta_marker,
+            beta_minimum,
             color=C_ORANGE,
-            width=LOCAL_BOUND_STROKE_WIDTH,
-            opacity=LOCAL_BOUND_OPACITY,
         )
-        track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
         self.play(beta_anchor @ beta_sweep_x, run_time=2)
         self.play(beta_anchor @ beta_left_sweep_x, run_time=2)
         self.play(beta_anchor @ x_t, run_time=2)
@@ -1204,10 +1054,7 @@ class SecondOrderApproximation(Slide):
         )
         self.next_slide()
 
-        track_plot_view()
-        self.play(view_scale @ 1)
-        refresh_plot_view()
-        clear_plot_view_updaters()
+        play_view_scale(1)
         self.play(Write(derivative_equation))
         self.next_slide()
 
