@@ -6,7 +6,6 @@ entrypoints = [
     "slides.gradient_descent_modes:GradientDescentModes",
     "slides.adagrad:AdaGrad",
     "slides.rosenbrock_momentum:MomentumRosenbrock",
-    "slides.momentum_quadratic_cloud:MomentumQuadraticCloud@opengl",
     "slides.momentum_damping:MomentumDampingRegimes",
     "slides.beales_plot:BealesPlot@opengl",
     "slides.beales_plot:BealesGradientDescentPlot@opengl",

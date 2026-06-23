@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from manim import (
+    DL,
     DR,
+    MoveToTarget,
     ReplacementTransform,
     SurroundingRectangle,
     TransformMatchingTex,
@@ -79,11 +81,10 @@ class GradientDescentModes(Slide):
         reminders = ReminderStack(
             [gd_update],
             width=mode_note_region.width,
-            corner=DR,
             orientation="horizontal",
         )
         reminder_parts = VGroup(reminders.frame, reminders.dividers, *reminders.entries)
-        self.region.place(reminders, DR, buff=SMALL_BUFF)
+        self.region.place(reminders, DL, buff=SMALL_BUFF)
 
         proof_region = self.region.copy()
         proof_region.update(bottom=reminders)
@@ -107,16 +108,7 @@ class GradientDescentModes(Slide):
             r"x_{t+1}-x^\star=(I-\eta A)^{t+1}(x_0-x^\star)."
             r"\]"
             r"Now use the eigenbasis. Since $A v_i=\lambda_i v_i$ and "
-            r"$x_0-x^\star=\sum_i\alpha_i v_i$,"
-            r"\["
-            r"\begin{aligned}"
-            r"x_{t+1}-x^\star"
-            r"&=\sum_{i=1}^n(1-\eta\lambda_i)^{t+1}\alpha_i v_i\\"
-            r"f(x_t)-f_\star"
-            r"&=\frac{1}{2}\sum_{i=1}^n"
-            r"\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}"
-            r"\end{aligned}"
-            r"\]",
+            r"$x_0-x^\star=\sum_i\alpha_i v_i$,",
             page_width=proof_region,
         )
         color_substrings(derivation_page, color_map, probe_class=MathTex)
@@ -124,13 +116,22 @@ class GradientDescentModes(Slide):
         derivation_equations = tuple(
             remove_invisible_chars(equation) for equation in derivation_page.equations
         )
-        eq_gd_mode_sum = derivation_equations[-1]
-        derivation_to_unwrite = VGroup(
-            *derivation_lines,
-            *derivation_equations[:-1],
+        mode_position_equation = theme_math(
+            r"x_{t+1}-x^\star"
+            r"=\sum_{i=1}^n(1-\eta\lambda_i)^{t+1}\alpha_i v_i",
         )
+        mode_value_equation = theme_math(
+            r"f(x_t)-f_\star"
+            r"=\frac{1}{2}\sum_{i=1}^n"
+            r"\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}",
+        )
+        mode_equations = VGroup(mode_position_equation, mode_value_equation).arrange(DOWN)
+        _color_text_parts(mode_equations, color_map)
+        mode_equations.next_to(derivation_lines[-1], DOWN)
+        mode_equations.set_x(derivation_page.get_x())
+        derivation_to_unwrite = VGroup(*derivation_lines, *derivation_equations)
         gd_mode_sum_frame = SurroundingRectangle(
-            eq_gd_mode_sum,
+            mode_equations,
             color=C_YELLOW,
             buff=SMALL_BUFF,
             corner_radius=PANEL_CORNER_RADIUS,
@@ -157,6 +158,7 @@ class GradientDescentModes(Slide):
         markers = VGroup(origin, origin_label, start, start_label)
         plot_shell = Group(heatmap, contours, axes, frame, markers)
         figure_region.scale_and_place(plot_shell, buff=SMALL_BUFF)
+        plot_shell.shift(RIGHT * (title.get_left()[0] - frame.get_left()[0]))
 
         slider = _eta_slider(
             eta,
@@ -167,6 +169,7 @@ class GradientDescentModes(Slide):
         slider.move_to(frame.get_corner(DL), aligned_edge=DL)
         slider.shift(RIGHT * SMALL_BUFF + UP * SMALL_BUFF)
         trajectory = _mode_trajectory(axes, eta).set_z_index(LAYER_TRAJECTORY)
+        left_figure = Group(plot_shell, trajectory, slider)
 
         responses = _mode_response_stack(
             eta,
@@ -177,6 +180,8 @@ class GradientDescentModes(Slide):
         responses.update()
 
         response_chart_frame = responses[0][0]
+        responses.shift(RIGHT * (title.get_right()[0] - response_chart_frame.get_right()[0]))
+        responses.update()
         mode_factor_region.update(
             left=response_chart_frame.get_left(),
             right=response_chart_frame.get_right(),
@@ -194,6 +199,8 @@ class GradientDescentModes(Slide):
         mode_factor_axis.update()
         rate_axis_title = mode_factor_axis[0]
         rate_axis_axes = mode_factor_axis[2][0]
+        mode_factor_axis.shift(RIGHT * (title.get_right()[0] - rate_axis_axes.x_axis.get_right()[0]))
+        mode_factor_axis.update()
 
         dynamic_mobjects = VGroup(slider, trajectory, responses, mode_factor_axis)
         dynamic_mobjects.suspend_updating()
@@ -211,37 +218,40 @@ class GradientDescentModes(Slide):
                 from_existing=True,
             ),
             Unwrite(hessian_scalar),
-            Write(derivation_page),
+            Write(derivation_equations[0]),
+        )
+        self.next_slide()
+
+        self.play(
+            Write(derivation_lines[0]),
+            Write(derivation_equations[1]),
+        )
+        self.next_slide()
+
+        self.play(
+            Write(derivation_lines[-1]),
+            Write(mode_position_equation),
+            Write(mode_value_equation),
             Create(gd_mode_sum_frame),
         )
         self.next_slide()
 
-        reminder_chart_target = reminders.copy()
-        if reminder_chart_target.width > ZERO_AXIS_EPSILON:
-            reminder_chart_target.scale(rate_axis_axes.x_axis.width / reminder_chart_target.width)
+        reminders.generate_target()
+        if reminders.target.width > ZERO_AXIS_EPSILON:
+            reminders.target.scale(rate_axis_axes.x_axis.width / reminders.target.width)
         mode_note_region.update(
             left=response_chart_frame.get_left(),
             right=response_chart_frame.get_right(),
         )
-        mode_note_region.place(reminder_chart_target, UR, buff=SMALL_BUFF)
-        reminder_chart_target.set_x(rate_axis_title.get_x())
+        mode_note_region.place(reminders.target, UR, buff=SMALL_BUFF)
+        reminders.target.align_to(title, RIGHT)
         compact_equations_region = equations_region.copy()
         compact_equations_region.update(
-            right=reminder_chart_target.get_left() + LEFT * SMALL_BUFF
+            right=reminders.target.get_left() + LEFT * SMALL_BUFF
         )
-        compact_mode_sum = theme_math(
-            r"\begin{aligned}"
-            r"x_{t+1}-x^\star"
-            r"&=\sum_{i=1}^n(1-\eta\lambda_i)^{t+1}\alpha_i v_i\\"
-            r"f(x_t)-f_\star"
-            r"&=\frac{1}{2}\sum_{i=1}^n"
-            r"\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}"
-            r"\end{aligned}",
-        )
-        _color_text_parts(compact_mode_sum, color_map)
+        compact_mode_sum = mode_equations.copy().arrange(DOWN, aligned_edge=LEFT)
         compact_equations_region.scale_and_place(
             compact_mode_sum,
-            UL,
             buff=SMALL_BUFF,
             scale_kwargs={"max_scale": 1},
         )
@@ -250,8 +260,8 @@ class GradientDescentModes(Slide):
             Unwrite(gd_mode_sum_frame),
         )
         self.play(
-            ReplacementTransform(eq_gd_mode_sum, compact_mode_sum),
-            reminders.animate.move_to(reminder_chart_target, aligned_edge=UR),
+            ReplacementTransform(mode_equations, compact_mode_sum),
+            MoveToTarget(reminders),
             FadeIn(heatmap),
             Write(contours),
             Write(frame),
@@ -303,11 +313,14 @@ class GradientDescentModes(Slide):
 
         self.next_slide()
 
-        equations_region.update(bottom=frame)
-        compact_mode_sum_top = compact_mode_sum.copy().scale(1 / 2)
-        equations_region.place(compact_mode_sum_top, UL, buff=SMALL_BUFF)
+        left_figure.generate_target()
+        left_figure.target.scale(1 / 2)
+        figure_region.place(left_figure.target, DL, buff=SMALL_BUFF)
+        left_target_frame = left_figure.target[0][3]
+        left_figure.target.shift(RIGHT * (title.get_left()[0] - left_target_frame.get_left()[0]))
+        equations_region.update(bottom=left_figure.target)
         rate_summary_region = equations_region.copy()
-        rate_summary_region.update(top=compact_mode_sum_top)
+        rate_summary_region.update(top=compact_mode_sum)
 
         balance_condition = theme_math(
             r"\begin{gathered}"
@@ -347,7 +360,7 @@ class GradientDescentModes(Slide):
             buff=SMALL_BUFF,
             scale_kwargs={"max_scale": 1},
         )
-        self.play(ReplacementTransform(compact_mode_sum, compact_mode_sum_top))
+        self.play(MoveToTarget(left_figure))
         self.play(Write(balance_condition))
         self.play(Write(rho_star))
         self.play(Write(convergence_bound))

@@ -6,12 +6,14 @@ import numpy as np
 import numpy.typing as npt
 from manim import (
     DEGREES,
-    Dot3D,
+    DOWN,
     FadeIn,
     Group,
     LaggedStart,
+    LEFT,
     Line3D,
     MathTex,
+    RIGHT,
     SMALL_BUFF,
     ThreeDAxes,
     Title,
@@ -221,7 +223,7 @@ class MomentumQuadraticCloud(ThreeDSlide):
 
     def _dot(self, axes: ThreeDAxes, point: FloatArray, radius: float):
         value = float(_quadratic_values(point))
-        return Dot3D(
+        return axes.get_origin().__class__(
             axes.c2p(float(point[0]), float(point[1]), value),
             color=_color_for_value(value),
             radius=radius,
