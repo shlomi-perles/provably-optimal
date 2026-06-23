@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 from manim import (
@@ -14,6 +14,7 @@ from manim import (
     UP,
     Animation,
     AnimationGroup,
+    ApplyMethod,
     FadeIn,
     FadeOut,
     Group,
@@ -43,26 +44,19 @@ ReminderOrientation = Literal["vertical", "horizontal"]
 
 
 class _ReminderStackAnimation(AnimationGroup):
-    """AnimationGroup with a tiny post-finish cleanup hook."""
+    """AnimationGroup with a tiny post-finish layout hook."""
 
     def __init__(
         self,
         *animations: Animation,
         cleanup: Callable[[], None],
-        scene_cleanup: Callable[[Any], None] | None = None,
     ) -> None:
         self._cleanup = cleanup
-        self._scene_cleanup = scene_cleanup
         super().__init__(*animations)
 
     def finish(self) -> None:
         super().finish()
         self._cleanup()
-
-    def clean_up_from_scene(self, scene: Any) -> None:
-        super().clean_up_from_scene(scene)
-        if self._scene_cleanup is not None:
-            self._scene_cleanup(scene)
 
 
 class ReminderStack(Group):
@@ -76,6 +70,7 @@ class ReminderStack(Group):
         max_height: float | None = None,
         corner: Sequence[float] | None = DL,
         orientation: ReminderOrientation = "vertical",
+        adaptive: bool = False,
         inner_buff: float = REMINDER_INNER_BUFF,
         cell_buff: float = SMALL_BUFF,
         fill_color: str | None = None,
@@ -91,12 +86,14 @@ class ReminderStack(Group):
         self.orientation = orientation
         if self.orientation not in ("vertical", "horizontal"):
             raise ValueError("orientation must be 'vertical' or 'horizontal'.")
+        self.adaptive = adaptive
         self.inner_buff = inner_buff
         self.cell_buff = cell_buff
         self.fill_color = fill_color if fill_color is not None else theme.web_palette.surface
         self.frame_color = frame_color if frame_color is not None else theme.palette.accent
         self.divider_color = divider_color if divider_color is not None else C_MUTED
         self._natural_sizes: dict[int, tuple[float, float]] = {}
+        self._fixed_height: float | None = None
 
         self.frame = Rectangle(
             width=self.reminder_width,
@@ -139,55 +136,67 @@ class ReminderStack(Group):
         from_existing: bool = False,
     ) -> Animation:
         """Animate adding reminders, optionally moving visible mobjects into the stack."""
-        new_reminders = tuple(reminders)
-        if len(new_reminders) == 0:
+        sources = tuple(reminders)
+        if len(sources) == 0:
             return AnimationGroup()
 
-        for reminder in new_reminders:
-            self._remember_natural_size(reminder)
+        new_entries = self._entries_to_add(sources, from_existing=from_existing)
+        old_entries = tuple(self.entries)
+        future_entries = [*old_entries, *new_entries]
 
-        future_entries = [*self.entries, *new_reminders]
         target_frame = self._target_frame_for(future_entries)
         entry_targets = self._entry_targets(future_entries, target_frame)
         new_dividers = self._make_dividers(future_entries, target_frame)
         old_dividers = self.dividers
-        previous_entry_count = len(self.entries)
 
         self.frame.target = target_frame
+        self.entries.add(*new_entries)
+        self.add(new_dividers)
 
         animations: list[Animation] = [MoveToTarget(self.frame)]
-        for entry, target in zip(self.entries, entry_targets[:previous_entry_count], strict=True):
+        for entry, target in zip(old_entries, entry_targets[: len(old_entries)], strict=True):
             entry.target = target
             animations.append(MoveToTarget(entry))
 
-        for reminder, target in zip(new_reminders, entry_targets[previous_entry_count:], strict=True):
+        for source, entry, target in zip(sources, new_entries, entry_targets[len(old_entries) :], strict=True):
             if from_existing:
-                reminder.target = target
-                reminder.set_z_index(LAYER_MARKERS + 2)
-                animations.append(MoveToTarget(reminder))
+                entry.target = target
+                animations.append(MoveToTarget(entry))
+                animations.append(ApplyMethod(source.set_opacity, 0))
             else:
-                self._apply_entry_target(reminder, target)
-                animations.append(FadeIn(reminder, shift=self._entry_shift()))
-            self.entries.add(reminder)
-
-        self.dividers = new_dividers
-        self.add(self.dividers)
-        self._style_entries_and_dividers()
+                self._apply_entry_target(entry, target)
+                animations.append(FadeIn(entry, shift=self._entry_shift()))
 
         animations.extend(FadeOut(divider) for divider in old_dividers)
         animations.extend(FadeIn(divider) for divider in new_dividers)
 
         def cleanup() -> None:
-            self.remove(old_dividers)
+            if from_existing:
+                for source in sources:
+                    source.set_opacity(0)
+            self._replace_dividers(new_dividers)
+            self._style_entries_and_dividers()
 
-        def scene_cleanup(scene: Any) -> None:
-            self._remove_direct_scene_references(scene, new_reminders)
+        return _ReminderStackAnimation(*animations, cleanup=cleanup)
 
-        return _ReminderStackAnimation(
-            *animations,
-            cleanup=cleanup,
-            scene_cleanup=scene_cleanup if from_existing else None,
-        )
+    def _entries_to_add(
+        self,
+        reminders: Sequence[Mobject],
+        *,
+        from_existing: bool,
+    ) -> tuple[Mobject, ...]:
+        entries = []
+        for reminder in reminders:
+            self._remember_natural_size(reminder)
+            if from_existing:
+                entry = reminder.copy()
+                self._natural_sizes[id(entry)] = self._natural_sizes[id(reminder)]
+                entry.move_to(reminder)
+                entry.set_z_index(LAYER_MARKERS + 2)
+            else:
+                entry = reminder
+            entries.append(entry)
+        return tuple(entries)
 
     def animate_remove(self, reminder: int | Mobject = -1) -> Animation:
         """Animate removing a reminder, then compact the remaining stack."""
@@ -202,6 +211,7 @@ class ReminderStack(Group):
         old_dividers = self.dividers
 
         self.frame.target = target_frame
+        self.add(new_dividers)
 
         animations: list[Animation] = [
             MoveToTarget(self.frame),
@@ -211,16 +221,13 @@ class ReminderStack(Group):
             entry.target = target
             animations.append(MoveToTarget(entry))
 
-        self.dividers = new_dividers
-        self.add(self.dividers)
-        self._style_entries_and_dividers()
-
         animations.extend(FadeOut(divider) for divider in old_dividers)
         animations.extend(FadeIn(divider) for divider in new_dividers)
 
         def cleanup() -> None:
             self.entries.remove(removed)
-            self.remove(old_dividers)
+            self._replace_dividers(new_dividers)
+            self._style_entries_and_dividers()
 
         return _ReminderStackAnimation(*animations, cleanup=cleanup)
 
@@ -236,10 +243,18 @@ class ReminderStack(Group):
             self._apply_entry_target(entry, target)
         self._style_entries_and_dividers()
 
+    def _replace_dividers(self, dividers: VGroup) -> None:
+        self.dividers = dividers
+        self.submobjects = [self.frame, self.dividers, self.entries]
+
     def _target_frame_for(self, entries: Iterable[Mobject]) -> Rectangle:
         entry_tuple = tuple(entries)
-        width = self._frame_width_for(entry_tuple)
-        height = self._frame_height_for(entry_tuple)
+        if self.orientation == "horizontal":
+            height = self._frame_height_for(entry_tuple)
+            width = self._frame_width_for(entry_tuple)
+        else:
+            width = self._frame_width_for(entry_tuple)
+            height = self._vertical_frame_height_for(entry_tuple, width)
         target = self.frame.copy()
         anchor = self._anchor_point()
         target.stretch_to_fit_width(width)
@@ -265,6 +280,8 @@ class ReminderStack(Group):
     def _frame_width_for(self, entries: Sequence[Mobject]) -> float:
         if self.orientation == "horizontal":
             return self._horizontal_frame_width_for(entries)
+        if self.adaptive:
+            return self._vertical_frame_width_for(entries)
         return self.reminder_width
 
     def _horizontal_frame_width_for(self, entries: Sequence[Mobject]) -> float:
@@ -273,14 +290,36 @@ class ReminderStack(Group):
         return sum(self._horizontal_cell_widths_for(entries))
 
     def _frame_height_for(self, entries: Sequence[Mobject]) -> float:
-        if self.orientation == "horizontal":
+        if self.orientation == "horizontal" and self.adaptive:
             return self._horizontal_frame_height_for(entries)
+        if self.orientation == "horizontal":
+            return self._fixed_horizontal_frame_height_for(entries)
         return self._vertical_frame_height_for(entries)
 
-    def _vertical_frame_height_for(self, entries: Sequence[Mobject]) -> float:
+    def _fixed_horizontal_frame_height_for(self, entries: Sequence[Mobject]) -> float:
+        if self._fixed_height is None and len(entries) > 0:
+            self._fixed_height = self._horizontal_frame_height_for(entries)
+        if self._fixed_height is not None:
+            return self._fixed_height
+        return 2 * self.cell_buff
+
+    def _vertical_frame_width_for(self, entries: Sequence[Mobject]) -> float:
         if len(entries) == 0:
             return 2 * self.cell_buff
-        return sum(self._vertical_cell_heights_for(entries))
+        content_widths, _content_heights = self._vertical_scaled_content_sizes_for(
+            entries,
+            self._content_width(),
+        )
+        return max(max(content_widths) + 2 * self.inner_buff, 2 * self.cell_buff)
+
+    def _vertical_frame_height_for(
+        self,
+        entries: Sequence[Mobject],
+        width: float | None = None,
+    ) -> float:
+        if len(entries) == 0:
+            return 2 * self.cell_buff
+        return sum(self._vertical_cell_heights_for(entries, width))
 
     def _horizontal_frame_height_for(self, entries: Sequence[Mobject]) -> float:
         if len(entries) == 0:
@@ -363,7 +402,7 @@ class ReminderStack(Group):
 
     def _vertical_cell_regions_for(self, entries: Sequence[Mobject], frame: Mobject) -> list[Region]:
         region = self._content_region_for(frame)
-        heights = self._vertical_cell_heights_for(entries)
+        heights = self._vertical_cell_heights_for(entries, frame.width)
         top = region.top
         cells = []
         for index, height in enumerate(heights):
@@ -409,24 +448,42 @@ class ReminderStack(Group):
             return RIGHT * SMALL_BUFF
         return REMINDER_ENTRY_SHIFT
 
-    def _width_limited_height(self, entry: Mobject, width: float | None = None) -> float:
-        natural_width, natural_height = self._natural_sizes[id(entry)]
-        if natural_width <= REMINDER_EPSILON:
-            return natural_height
-        content_width = self._content_width() if width is None else max(width, REMINDER_EPSILON)
-        return natural_height * min(content_width / natural_width, 1)
-
-    def _content_width(self) -> float:
-        return max(self.reminder_width - 2 * self.inner_buff, REMINDER_EPSILON)
+    def _content_width(self, width: float | None = None) -> float:
+        frame_width = self.reminder_width if width is None else width
+        return max(frame_width - 2 * self.inner_buff, REMINDER_EPSILON)
 
     def _horizontal_cell_widths_for(self, entries: Sequence[Mobject]) -> list[float]:
         scale = self._horizontal_entry_scale_for(entries)
         return [self._natural_width(entry) * scale + 2 * self.cell_buff for entry in entries]
 
-    def _vertical_cell_heights_for(self, entries: Sequence[Mobject]) -> list[float]:
-        content_heights = [self._width_limited_height(entry) for entry in entries]
-        scale = self._vertical_height_scale_for(entries, content_heights)
-        return [content_height * scale + 2 * self.cell_buff for content_height in content_heights]
+    def _vertical_cell_heights_for(
+        self,
+        entries: Sequence[Mobject],
+        width: float | None = None,
+    ) -> list[float]:
+        _content_widths, content_heights = self._vertical_scaled_content_sizes_for(
+            entries,
+            self._content_width(width),
+        )
+        return [content_height + 2 * self.cell_buff for content_height in content_heights]
+
+    def _vertical_scaled_content_sizes_for(
+        self,
+        entries: Sequence[Mobject],
+        content_width: float,
+    ) -> tuple[list[float], list[float]]:
+        widths = []
+        heights = []
+        for entry in entries:
+            natural_width, natural_height = self._natural_sizes[id(entry)]
+            width_scale = min(content_width / natural_width, 1)
+            widths.append(natural_width * width_scale)
+            heights.append(natural_height * width_scale)
+        height_scale = self._vertical_height_scale_for(entries, heights)
+        return (
+            [width * height_scale for width in widths],
+            [height * height_scale for height in heights],
+        )
 
     def _horizontal_entry_scale_for(self, entries: Sequence[Mobject]) -> float:
         total_content_width = sum(self._natural_width(entry) for entry in entries)
@@ -449,6 +506,8 @@ class ReminderStack(Group):
         return max(self.reminder_width - 2 * self.cell_buff * entry_count, REMINDER_EPSILON)
 
     def _available_horizontal_content_height(self) -> float:
+        if self.orientation == "horizontal" and not self.adaptive and self._fixed_height is not None:
+            return max(self._fixed_height - 2 * self.cell_buff, REMINDER_EPSILON)
         return max(self.max_height - 2 * self.cell_buff, REMINDER_EPSILON)
 
     def _natural_width(self, entry: Mobject) -> float:
@@ -480,12 +539,3 @@ class ReminderStack(Group):
     def _style_entries_and_dividers(self) -> None:
         self.entries.set_z_index(LAYER_MARKERS + 2)
         self.dividers.set_z_index(LAYER_MARKERS + 1)
-
-    @staticmethod
-    def _remove_direct_scene_references(scene: Any, reminders: Sequence[Mobject]) -> None:
-        def keep_mobject(mobject: Mobject) -> bool:
-            return all(mobject is not reminder for reminder in reminders)
-
-        for list_name in ("mobjects", "foreground_mobjects"):
-            if hasattr(scene, list_name):
-                setattr(scene, list_name, [mobject for mobject in getattr(scene, list_name) if keep_mobject(mobject)])
