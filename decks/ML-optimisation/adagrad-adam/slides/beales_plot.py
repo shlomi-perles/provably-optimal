@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import pairwise
 
@@ -76,9 +77,11 @@ PATCH_RESOLUTION = (BEALE_PATCH_POINTS, 4 * BEALE_PATCH_POINTS)
 SURFACE_COLORMAP = "Viridis_r"
 PATCH_COLORMAP = "colorbrewer:YlOrBr"
 
-MODEL_OPACITIES = (0.55, 0.75, 1.0)
+MODEL_OPACITIES: tuple[float | None, ...] = (0.55, 0.75, 1.0)
 MARKER_Z_LIFT = 0.24
 MODEL_CAP_LIFT = 0.3
+GRADIENT_DESCENT_MODEL_CAP_LIFT = 2.0
+GRADIENT_DESCENT_MODEL_OPACITIES: tuple[float | None, ...] = (None,) * BEALE_STEPS
 LABEL_XY_OFFSETS = np.array(
     [
         [-0.55, 0.55],
@@ -119,7 +122,7 @@ class ModelPatchSpec:
     center: FloatArray
     radius: float
     cap_height: float
-    opacity: float
+    opacity: float | None
 
     @property
     def cap_delta(self) -> float:
@@ -217,8 +220,21 @@ def _simulate_beale_steps() -> FloatArray:
     return np.asarray(points, dtype=np.float64)
 
 
-def _make_plot_data() -> BealePlotData:
-    points = _simulate_beale_steps()
+def _simulate_gradient_descent_steps() -> FloatArray:
+    point = BEALE_START_POINT.copy()
+    points = [point.copy()]
+    for _ in range(BEALE_STEPS):
+        point = point - BEALE_LEARNING_RATE * _gradient_at(point)
+        points.append(point.copy())
+    return np.asarray(points, dtype=np.float64)
+
+
+def _make_plot_data(
+    points: FloatArray,
+    *,
+    model_cap_lift: float,
+    model_opacities: Sequence[float | None],
+) -> BealePlotData:
     visible_points = points[:3]
     point_heights = np.asarray([_displayed_beale_height(point) for point in points])
     visible_heights = point_heights[:3]
@@ -228,7 +244,7 @@ def _make_plot_data() -> BealePlotData:
 
     patches: list[ModelPatchSpec] = []
     for opacity, (base_point, next_point), base_height in zip(
-        MODEL_OPACITIES,
+        model_opacities,
         pairwise(points),
         point_heights[:-1],
         strict=True,
@@ -237,7 +253,7 @@ def _make_plot_data() -> BealePlotData:
             ModelPatchSpec(
                 center=next_point,
                 radius=float(np.linalg.norm(next_point - base_point)),
-                cap_height=float(base_height + MODEL_CAP_LIFT),
+                cap_height=float(base_height + model_cap_lift),
                 opacity=opacity,
             )
         )
@@ -257,16 +273,26 @@ def _make_plot_data() -> BealePlotData:
 class BealesPlot(ThreeDSlide):
     """Beale surface, momentum samples, and capped quadratic models."""
 
+    slide_title = "Beale's Function"
+    sample_fragment_title = "Momentum samples"
+    model_fragment_title = "Capped quadratic models"
+    update_equation = r"x_{t+1}=x_t-\eta\sum_{j=0}^{t}\gamma^j\nabla f(x_{t-j})"
+    model_caption = "momentum models"
+    model_bound = rf"Q_t(x)\le f(x_t)+{MODEL_CAP_LIFT:g}"
+    label_texts = (r"x_{t-1}", r"x_t", r"x_{t+1}")
+    model_cap_lift = MODEL_CAP_LIFT
+    model_opacities = MODEL_OPACITIES
+
     def setup(self) -> None:
         super().setup()
         self.region = self.region.fix_in_frame()
 
     def construct(self) -> None:
-        self.slide(title="Beale's Function")
+        self.slide(title=self.slide_title)
         self.set_camera_orientation(phi=CAMERA_INITIAL_PHI, theta=CAMERA_INITIAL_THETA)
 
-        data = _make_plot_data()
-        title = Title("Beale's Function")
+        data = self._make_plot_data()
+        title = Title(self.slide_title)
         self.region.place(title, UP)
         self.region.update(top=title)
         plot_region, hud_region = split_weighted(self.region, PLOT_HUD_WIDTH_RATIOS)
@@ -302,14 +328,24 @@ class BealesPlot(ThreeDSlide):
             FadeIn(hud_panel[0]),
             Write(hud_mobjects[0]),
         )
-        self.fragment(title="Momentum samples")
+        self.fragment(title=self.sample_fragment_title)
         self.play(Create(path_lines), FadeIn(path_dots), Write(labels))
-        self.fragment(title="Capped quadratic models")
+        self.fragment(title=self.model_fragment_title)
         self.play(Create(patches), Write(hud_mobjects[1]), Write(hud_mobjects[2]))
         self.move_camera(
             phi=CAMERA_FINAL_PHI,
             theta=CAMERA_FINAL_THETA,
             run_time=CAMERA_MOVE_RUN_TIME,
+        )
+
+    def _trajectory_points(self) -> FloatArray:
+        return _simulate_beale_steps()
+
+    def _make_plot_data(self) -> BealePlotData:
+        return _make_plot_data(
+            self._trajectory_points(),
+            model_cap_lift=self.model_cap_lift,
+            model_opacities=self.model_opacities,
         )
 
     def _make_axes(self, data: BealePlotData) -> ThreeDAxes:
@@ -342,6 +378,10 @@ class BealesPlot(ThreeDSlide):
             height = spec.cap_height - spec.cap_delta + 0.5 * radius**2 / BEALE_LEARNING_RATE
             return axes.c2p(float(xy[0]), float(xy[1]), float(height))
 
+        surface_kwargs = {}
+        if spec.opacity is not None:
+            surface_kwargs["opacity"] = spec.opacity
+
         return ScalarFieldSurface(
             patch_point,
             u_range=[0.0, spec.radius],
@@ -349,7 +389,7 @@ class BealesPlot(ThreeDSlide):
             resolution=PATCH_RESOLUTION,
             color_func="height",
             colormap=PATCH_COLORMAP,
-            opacity=spec.opacity,
+            **surface_kwargs,
         )
 
     def _make_path(self, axes: ThreeDAxes, data: BealePlotData) -> tuple[Group, Group]:
@@ -380,14 +420,13 @@ class BealesPlot(ThreeDSlide):
 
     def _make_labels(self, axes: ThreeDAxes, data: BealePlotData) -> VGroup:
         theme = get_active_theme()
-        label_texts = (r"x_{t-1}", r"x_t", r"x_{t+1}")
         return VGroup(
             *(
                 MathTex(label, color=BLACK, font_size=theme.typography.caption).move_to(
                     axes.c2p(float(point[0]), float(point[1]), float(height))
                 )
                 for label, point, height in zip(
-                    label_texts,
+                    self.label_texts,
                     data.label_xy,
                     data.label_heights,
                     strict=True,
@@ -425,7 +464,7 @@ class BealesPlot(ThreeDSlide):
                 typography="caption",
             ),
             theme_math(
-                r"x_{t+1}=x_t-\eta\sum_{j=0}^{t}\gamma^j\nabla f(x_{t-j})",
+                self.update_equation,
                 color=C_TEXT,
                 typography="caption",
             ),
@@ -448,8 +487,8 @@ class BealesPlot(ThreeDSlide):
         color_legend.align_to(equation, LEFT)
 
         patch_legend = VGroup(
-            Caption("momentum models"),
-            theme_math(r"Q_t(x)\le f(x_t)+0.3", color=C_TEXT, typography="caption"),
+            Caption(self.model_caption),
+            theme_math(self.model_bound, color=C_TEXT, typography="caption"),
         ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
         patch_legend[1].set_color_by_tex(r"Q_t", C_ORANGE)
 
@@ -461,3 +500,19 @@ class BealesPlot(ThreeDSlide):
         panel = glass_panel(hud)
         hud_region.scale_and_place(panel, buff=SMALL_BUFF)
         return panel, (equation, color_legend, patch_legend)
+
+
+class BealesGradientDescentPlot(BealesPlot):
+    """Beale surface, gradient-descent samples, and capped quadratic models."""
+
+    slide_title = "Gradient Descent on Beale's Function"
+    sample_fragment_title = "Gradient descent samples"
+    update_equation = r"x_{t+1}=x_t-\eta\nabla f(x_t)"
+    model_caption = "gradient descent models"
+    model_bound = rf"Q_t(x)\le f(x_t)+{GRADIENT_DESCENT_MODEL_CAP_LIFT:g}"
+    label_texts = (r"x_t", r"x_{t+1}", r"x_{t+2}")
+    model_cap_lift = GRADIENT_DESCENT_MODEL_CAP_LIFT
+    model_opacities = GRADIENT_DESCENT_MODEL_OPACITIES
+
+    def _trajectory_points(self) -> FloatArray:
+        return _simulate_gradient_descent_steps()

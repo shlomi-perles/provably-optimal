@@ -6,6 +6,7 @@ entrypoints = [
     "slides.gradient_descent_modes:GradientDescentModes",
     "slides.rosenbrock_momentum:MomentumRosenbrock",
     "slides.beales_plot:BealesPlot@opengl",
+    "slides.beales_plot:BealesGradientDescentPlot@opengl",
     "slides.adagrad_known_ruler:AdaGradKnownRuler",
     "slides.adagrad_diagonal_scaling:AdaGradDiagonalScaling",
     "slides.local_squeeze:AdaGradLocalSqueeze@opengl",

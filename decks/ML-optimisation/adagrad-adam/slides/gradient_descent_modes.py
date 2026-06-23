@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from manim import SurroundingRectangle, Unwrite, VGroup
+from manim import SurroundingRectangle, UR, Unwrite, VGroup
+from manim.mobject.text.text_mobject import remove_invisible_chars
 
 from slides.helpers.figure_helpers import *
 from slides.helpers.reminders import ReminderStack
@@ -16,10 +17,10 @@ class GradientDescentModes(Slide):
     def construct(self) -> None:
         title = _start_slide(self, "Gradient descent is a scalar compromise")
         self.region.update(left=title.get_left(), right=title.get_right())
-        intro_region, proof_region = _split_rows(self.region, [1, 5])
-        function_region, _ = _split_rows(intro_region, [1, 1])
+        _, proof_region = _split_rows(self.region, [1, 5])
         top, bottom = _split_rows(self.region, [1, 2])
         equations_region, mode_factor_region = _split_weighted(top, [2, 3])
+        mode_note_region, mode_factor_region = _split_rows(mode_factor_region, [1, 1])
         figure_region, response_region = _split_weighted(bottom, [2, 3])
         matrix, _ = _rotated_quadratic_matrix()
         eigenvalues, _ = _quadratic_eigendecomposition(matrix)
@@ -48,12 +49,6 @@ class GradientDescentModes(Slide):
             r"x_0": C_YELLOW,
         }
 
-        function_definition = theme_math(
-            r"f(x)=\frac{1}{2}(x-x^\star)^\top A(x-x^\star)",
-        )
-        _color_text_parts(function_definition, color_map)
-        function_region.place(function_definition, UP)
-
         gd_update = theme_math(
             r"x_{t+1}=x_t-\eta\nabla f(x_t)",
             typography="caption",
@@ -62,15 +57,33 @@ class GradientDescentModes(Slide):
             r"(\nabla^2 f(x_t))^{-1}\approx\eta",
             typography="caption",
         )
+        curvature_note = theme_math(
+            r"\lambda_{\min}(\nabla^2 f(x))=\alpha,\quad "
+            r"\lambda_{\max}(\nabla^2 f(x))=\beta",
+            typography="caption",
+        )
+        function_gradient_note = theme_math(
+            r"f(x)=\frac{1}{2}(x-x^\star)^\top A(x-x^\star),\quad "
+            r"\nabla f(x_t)=A(x_t-x^\star)",
+            typography="caption",
+        )
         _color_text_parts(gd_update, color_map)
         _color_text_parts(inverse_hessian_note, color_map)
+        _color_text_parts(curvature_note, color_map)
+        _color_text_parts(function_gradient_note, color_map)
         reminders = ReminderStack(
-            [gd_update, inverse_hessian_note],
+            [gd_update, inverse_hessian_note, curvature_note],
+            width=mode_note_region.width,
             orientation="horizontal",
         )
         reminder_parts = VGroup(reminders.frame, reminders.dividers, *reminders.entries)
 
         derivation_page = TexPage(
+            r"For "
+            r"$f(x)=\frac{1}{2}(x-x^\star)^\top A(x-x^\star)$"
+            r", "
+            r"$\nabla f(x_t)=A(x_t-x^\star)$"
+            r"\par "
             r"\["
             r"\begin{aligned}"
             r"x_{t+1}-x^\star"
@@ -97,8 +110,17 @@ class GradientDescentModes(Slide):
             page_width=proof_region,
         )
         color_substrings(derivation_page, color_map, probe_class=MathTex)
-        proof_region.place(derivation_page)
-        eq_gd_mode_sum = derivation_page.equation(3)
+        proof_region.scale_and_place(derivation_page, buff=0)
+        derivation_lines = tuple(remove_invisible_chars(line) for line in derivation_page.lines)
+        derivation_equations = tuple(
+            remove_invisible_chars(equation) for equation in derivation_page.equations
+        )
+        function_gradient_line = derivation_lines[0]
+        update_equation = derivation_equations[0]
+        recursion_line = derivation_lines[1]
+        recursion_equation = derivation_equations[1]
+        eigenbasis_line = derivation_lines[2]
+        eq_gd_mode_sum = derivation_equations[2]
         gd_mode_sum_frame = SurroundingRectangle(
             eq_gd_mode_sum,
             color=C_YELLOW,
@@ -146,6 +168,11 @@ class GradientDescentModes(Slide):
         response_region.scale_and_place(responses, buff=SMALL_BUFF)
         responses.update()
 
+        response_chart_frame = responses[0][0]
+        mode_factor_region.update(
+            left=response_chart_frame.get_left(),
+            right=response_chart_frame.get_right(),
+        )
         mode_factor_axis = _mode_factor_axis(
             eta,
             mode_factor_iteration,
@@ -155,7 +182,7 @@ class GradientDescentModes(Slide):
             width=mode_factor_region.width,
             height=mode_factor_region.height,
         )
-        mode_factor_region.scale_and_place(mode_factor_axis, buff=SMALL_BUFF)
+        mode_factor_region.scale_and_place(mode_factor_axis, buff=0)
         mode_factor_axis.update()
 
         compact_mode_sum = eq_gd_mode_sum.copy()
@@ -164,33 +191,35 @@ class GradientDescentModes(Slide):
             buff=SMALL_BUFF,
         )
 
-        self.play(Write(title), Write(function_definition), Write(reminder_parts))
+        self.play(Write(title), Write(reminder_parts))
         self.next_slide()
 
-        self.play(Write(derivation_page.equation(0)))
+        self.play(Write(function_gradient_line), reminders.animate_add(function_gradient_note))
         self.next_slide()
 
-        self.play(Write(derivation_page.line(0)), Write(derivation_page.equation(1)))
+        self.play(Write(update_equation))
         self.next_slide()
 
-        self.play(Write(derivation_page.line(1)), Write(derivation_page.equation(2)))
+        self.play(Write(recursion_line), Write(recursion_equation))
         self.next_slide()
 
-        self.play(Write(derivation_page.line(2)), Write(eq_gd_mode_sum))
+        self.play(Write(eigenbasis_line), Write(eq_gd_mode_sum))
         self.play(Create(gd_mode_sum_frame))
         self.next_slide()
 
+        reminder_chart_target = reminders.copy()
+        mode_note_region.place(reminder_chart_target, UR)
         self.play(
-            Unwrite(function_definition),
-            Unwrite(reminder_parts),
-            Unwrite(derivation_page.equation(0)),
-            Unwrite(derivation_page.line(0)),
-            Unwrite(derivation_page.equation(1)),
-            Unwrite(derivation_page.line(1)),
-            Unwrite(derivation_page.equation(2)),
-            Unwrite(derivation_page.line(2)),
+            Unwrite(function_gradient_line),
+            Unwrite(update_equation),
+            Unwrite(recursion_line),
+            Unwrite(recursion_equation),
+            Unwrite(eigenbasis_line),
             Unwrite(eq_gd_mode_sum),
             Unwrite(gd_mode_sum_frame),
+        )
+        self.play(
+            reminders.animate.move_to(reminder_chart_target, aligned_edge=UR),
             Write(compact_mode_sum),
             FadeIn(heatmap),
             Write(contours),
