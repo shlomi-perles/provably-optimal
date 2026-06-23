@@ -317,7 +317,7 @@ class GradientDescentModes(Slide):
             typography="caption",
         )
         rho_star = theme_math(
-            r"\rho_\star^{\mathrm{GD}}="
+            r"\rho_\star^{\mathrm{GD}}"
             r"=1-\frac{2}{\kappa+1}",
             typography="caption",
         )
