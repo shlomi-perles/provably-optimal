@@ -75,36 +75,35 @@ class SecondOrderApproximation(Slide):
         f_star = float(f(np.array([x_star]))[0])
         x_min, x_max, x_step = LOCAL_X_RANGE
         base_x_span = x_max - x_min
-        alpha_sweep_x = float(x_star + 4)
-        beta_right_sweep_x = float(x_star + 15)
-        beta_left_sweep_x = float(x_star - 15)
+        alpha_sweep_x = float(x_star + 2 * abs(x_star - x_t))
+        beta_sweep_x = float(x_star + abs(x_star - x_t))
+        view_sweep_x = max(alpha_sweep_x, beta_sweep_x)
         zoom_anchor_x = float(x_star)
         zoom_anchor_x_ratio = (zoom_anchor_x - x_min) / base_x_span
         zoom_padding = x_step / 2
-        zoom_out_scale = (
-            3
-            / 4
-            * 3
-            * max(
-                1.0,
-                (alpha_sweep_x + zoom_padding - zoom_anchor_x)
-                / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
-                (zoom_anchor_x - min(x_min, x_t) + zoom_padding)
-                / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
-            )
+        zoom_out_scale = max(
+            1.0,
+            (view_sweep_x + zoom_padding - zoom_anchor_x)
+            / max(x_max - zoom_anchor_x, ZERO_AXIS_EPSILON),
+            (zoom_anchor_x - min(x_min, x_t) + zoom_padding)
+            / max(zoom_anchor_x - x_min, ZERO_AXIS_EPSILON),
         )
+        zoom_x_span = base_x_span * zoom_out_scale
+        zoom_x_min = zoom_anchor_x - zoom_anchor_x_ratio * zoom_x_span
+        zoom_x_max = zoom_x_min + zoom_x_span
         curvature_domain = np.linspace(
-            x_min,
-            x_max,
+            min(x_min, zoom_x_min, x_t, alpha_sweep_x, beta_sweep_x),
+            max(x_max, zoom_x_max, x_t, alpha_sweep_x, beta_sweep_x),
             LOCAL_CURVE_SAMPLES,
         )
+        sweep_endpoints = (x_t, alpha_sweep_x, beta_sweep_x)
         curvature_anchor_count = max(
-            2,
+            len(sweep_endpoints),
             LOCAL_CURVE_SAMPLES // LOCAL_MODEL_DASH_COUNT,
         )
         curvature_anchor_values = np.linspace(
-            x_min,
-            x_max,
+            min(sweep_endpoints),
+            max(sweep_endpoints),
             curvature_anchor_count,
         )
 
@@ -1147,8 +1146,7 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOUND_OPACITY,
         )
         track_x_marker(alpha_marker, alpha_minimum, color=C_BLUE)
-        self.play(alpha_anchor @ alpha_sweep_x, run_time=6)
-        self.play(alpha_anchor @ x_t, run_time=6)
+        self.play(alpha_anchor @ alpha_sweep_x, run_time=2)
         self.next_slide()
 
         for mob in (lower_model, alpha_marker):
@@ -1161,10 +1159,7 @@ class SecondOrderApproximation(Slide):
             opacity=LOCAL_BOUND_OPACITY,
         )
         track_x_marker(beta_marker, beta_minimum, color=C_ORANGE)
-        beta_sweep_run_time = 6 / (3 / 2)
-        self.play(beta_anchor @ beta_right_sweep_x, run_time=beta_sweep_run_time)
-        self.play(beta_anchor @ beta_left_sweep_x, run_time=beta_sweep_run_time)
-        self.play(beta_anchor @ x_t, run_time=beta_sweep_run_time)
+        self.play(beta_anchor @ beta_sweep_x, run_time=2)
         self.next_slide()
 
         for mob in (upper_model, beta_marker):
