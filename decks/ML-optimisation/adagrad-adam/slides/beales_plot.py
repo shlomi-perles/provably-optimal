@@ -63,7 +63,10 @@ BEALE_START_POINT = np.array([1.6, 2.7], dtype=np.float64)
 BEALE_LEARNING_RATE = 0.7
 BEALE_MOMENTUM = 0.65
 BEALE_STEPS = 3
+GRADIENT_DESCENT_MODEL_STEP_COUNT = 2
 FINITE_DIFFERENCE_STEP = 1e-2
+ADAGRAD_START_POINT = np.array([0.42, -5.7], dtype=np.float64)
+ADAGRAD_EPSILON = FINITE_DIFFERENCE_STEP**2
 
 DOMAIN_LIMIT = BEALE_LIMIT + BEALE_PAD_THICKNESS
 PAD_HEIGHT = BEALE_Z_MAX * BEALE_SCALE
@@ -74,14 +77,22 @@ LOG_COLOR_RANGE = (float(np.log10(RAW_COLOR_FLOOR)), float(np.log10(BEALE_Z_MAX)
 
 SURFACE_RESOLUTION = (BEALE_GRID_POINTS, BEALE_GRID_POINTS)
 PATCH_RESOLUTION = (BEALE_PATCH_POINTS, 4 * BEALE_PATCH_POINTS)
+GRADIENT_DESCENT_RESOLUTION_SCALE = 1 / 2
+GRADIENT_DESCENT_PATCH_RESOLUTION = tuple(
+    round(points * GRADIENT_DESCENT_RESOLUTION_SCALE) for points in PATCH_RESOLUTION
+)
 SURFACE_COLORMAP = "Viridis_r"
 PATCH_COLORMAP = "colorbrewer:YlOrBr"
 
 MODEL_OPACITIES: tuple[float | None, ...] = (0.55, 0.75, 1.0)
 MARKER_Z_LIFT = 0.24
 MODEL_CAP_LIFT = 0.3
-GRADIENT_DESCENT_MODEL_CAP_LIFT = 2.0
-GRADIENT_DESCENT_MODEL_OPACITIES: tuple[float | None, ...] = (None,) * BEALE_STEPS
+GRADIENT_DESCENT_MODEL_CAP_LIFT = MODEL_CAP_LIFT
+GRADIENT_DESCENT_MODEL_OPACITIES: tuple[float | None, ...] = (
+    None,
+) * GRADIENT_DESCENT_MODEL_STEP_COUNT
+ADAGRAD_MODEL_CAP_LIFT = 2.0
+ADAGRAD_MODEL_OPACITIES: tuple[float | None, ...] = (None,)
 LABEL_XY_OFFSETS = np.array(
     [
         [-0.55, 0.55],
@@ -229,6 +240,17 @@ def _simulate_gradient_descent_steps() -> FloatArray:
     return np.asarray(points, dtype=np.float64)
 
 
+def _adagrad_gradient_and_scale(point: FloatArray) -> tuple[FloatArray, FloatArray]:
+    gradient = _gradient_at(point)
+    return gradient, np.sqrt(gradient**2 + ADAGRAD_EPSILON)
+
+
+def _simulate_adagrad_step() -> FloatArray:
+    gradient, scale = _adagrad_gradient_and_scale(ADAGRAD_START_POINT)
+    next_point = ADAGRAD_START_POINT - BEALE_LEARNING_RATE * gradient / scale
+    return np.asarray([ADAGRAD_START_POINT, next_point], dtype=np.float64)
+
+
 def _make_plot_data(
     points: FloatArray,
     *,
@@ -239,8 +261,8 @@ def _make_plot_data(
     point_heights = np.asarray([_displayed_beale_height(point) for point in points])
     visible_heights = point_heights[:3]
     marker_heights = visible_heights + MARKER_Z_LIFT
-    label_xy = visible_points + LABEL_XY_OFFSETS
-    label_heights = visible_heights + LABEL_Z_OFFSETS
+    label_xy = visible_points + LABEL_XY_OFFSETS[: len(visible_points)]
+    label_heights = visible_heights + LABEL_Z_OFFSETS[: len(visible_points)]
 
     patches: list[ModelPatchSpec] = []
     for opacity, (base_point, next_point), base_height in zip(
@@ -282,6 +304,9 @@ class BealesPlot(ThreeDSlide):
     label_texts = (r"x_{t-1}", r"x_t", r"x_{t+1}")
     model_cap_lift = MODEL_CAP_LIFT
     model_opacities = MODEL_OPACITIES
+    surface_resolution = SURFACE_RESOLUTION
+    patch_resolution = PATCH_RESOLUTION
+    path_color = C_GREEN
 
     def setup(self) -> None:
         super().setup()
@@ -366,7 +391,7 @@ class BealesPlot(ThreeDSlide):
             lambda u, v: axes.c2p(u, v, _displayed_beale_height(np.array([u, v]))),
             u_range=[-DOMAIN_LIMIT, DOMAIN_LIMIT],
             v_range=[-DOMAIN_LIMIT, DOMAIN_LIMIT],
-            resolution=SURFACE_RESOLUTION,
+            resolution=self.surface_resolution,
             color_func=_displayed_beale_color,
             colormap=SURFACE_COLORMAP,
             color_range=LOG_COLOR_RANGE,
@@ -386,7 +411,7 @@ class BealesPlot(ThreeDSlide):
             patch_point,
             u_range=[0.0, spec.radius],
             v_range=[0.0, TAU],
-            resolution=PATCH_RESOLUTION,
+            resolution=self.patch_resolution,
             color_func="height",
             colormap=PATCH_COLORMAP,
             **surface_kwargs,
@@ -403,7 +428,7 @@ class BealesPlot(ThreeDSlide):
             *(
                 Sphere(
                     center=point,
-                    color=C_GREEN,
+                    color=self.path_color,
                     radius=dot_radius,
                     resolution=PATH_DOT_RESOLUTION,
                 )
@@ -412,7 +437,7 @@ class BealesPlot(ThreeDSlide):
         )
         lines = Group(
             *(
-                Line3D(start, end, color=C_GREEN, thickness=line_thickness)
+                Line3D(start, end, color=self.path_color, thickness=line_thickness)
                 for start, end in pairwise(path_points)
             )
         )
@@ -473,6 +498,8 @@ class BealesPlot(ThreeDSlide):
             mob.set_color_by_tex(r"\eta", C_YELLOW)
             mob.set_color_by_tex(r"\gamma", C_TEAL)
             mob.set_color_by_tex(r"\nabla", C_ORANGE)
+            mob.set_color_by_tex(r"g_t", C_TEAL)
+            mob.set_color_by_tex(r"\epsilon", C_YELLOW)
 
         bar = ColorBar(
             colormap=SURFACE_COLORMAP,
@@ -510,9 +537,51 @@ class BealesGradientDescentPlot(BealesPlot):
     update_equation = r"x_{t+1}=x_t-\eta\nabla f(x_t)"
     model_caption = "gradient descent models"
     model_bound = rf"Q_t(x)\le f(x_t)+{GRADIENT_DESCENT_MODEL_CAP_LIFT:g}"
-    label_texts = (r"x_t", r"x_{t+1}", r"x_{t+2}")
+    label_texts = (r"x_{t-1}", r"x_t", r"x_{t+1}")
     model_cap_lift = GRADIENT_DESCENT_MODEL_CAP_LIFT
     model_opacities = GRADIENT_DESCENT_MODEL_OPACITIES
+    patch_resolution = GRADIENT_DESCENT_PATCH_RESOLUTION
 
     def _trajectory_points(self) -> FloatArray:
-        return _simulate_gradient_descent_steps()
+        return _simulate_gradient_descent_steps()[: GRADIENT_DESCENT_MODEL_STEP_COUNT + 1]
+
+
+class BealesAdaGradPlot(BealesPlot):
+    """One AdaGrad step on Beale, with a diagonal capped quadratic model."""
+
+    slide_title = "AdaGrad Step on Beale's Function"
+    sample_fragment_title = "One AdaGrad step"
+    model_fragment_title = "Diagonal capped model"
+    update_equation = r"x_{t+1}=x_t-\eta\frac{g_t}{\sqrt{g_t^2+\epsilon}}"
+    model_caption = "AdaGrad diagonal model"
+    model_bound = rf"Q_t(x)\le f(x_t)+{ADAGRAD_MODEL_CAP_LIFT:g}"
+    label_texts = (r"x_t", r"x_{t+1}")
+    model_cap_lift = ADAGRAD_MODEL_CAP_LIFT
+    model_opacities = ADAGRAD_MODEL_OPACITIES
+    patch_resolution = GRADIENT_DESCENT_PATCH_RESOLUTION
+    path_color = C_TEAL
+
+    def _trajectory_points(self) -> FloatArray:
+        return _simulate_adagrad_step()
+
+    def _make_patch(self, axes: ThreeDAxes, spec: ModelPatchSpec) -> ScalarFieldSurface:
+        gradient, scale = _adagrad_gradient_and_scale(ADAGRAD_START_POINT)
+        inverse_scale = np.divide(1.0, scale)
+        cap_delta = 0.5 * BEALE_LEARNING_RATE * float(gradient @ (inverse_scale * gradient))
+        radius = np.sqrt(2 * BEALE_LEARNING_RATE * cap_delta)
+        inverse_sqrt_scale = np.divide(1.0, np.sqrt(scale))
+
+        def patch_point(local_radius: float, angle: float) -> FloatArray:
+            local = local_radius * np.array([np.cos(angle), np.sin(angle)], dtype=np.float64)
+            xy = spec.center + inverse_sqrt_scale * local
+            height = spec.cap_height - cap_delta + 0.5 * local_radius**2 / BEALE_LEARNING_RATE
+            return axes.c2p(float(xy[0]), float(xy[1]), float(height))
+
+        return ScalarFieldSurface(
+            patch_point,
+            u_range=[0.0, radius],
+            v_range=[0.0, TAU],
+            resolution=self.patch_resolution,
+            color_func="height",
+            colormap=PATCH_COLORMAP,
+        )
