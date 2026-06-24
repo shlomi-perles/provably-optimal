@@ -321,7 +321,7 @@ class GradientDescentModes(Slide):
                 eta_end=eta_safe,
             ),
         )
-        self.wait()
+        self.wait(2)
         self.next_slide()
         self.wait(0.5)
         self.play(
