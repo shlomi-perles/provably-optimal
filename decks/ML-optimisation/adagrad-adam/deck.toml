@@ -5,7 +5,6 @@ entrypoints = [
     "slides.gradient_descent_modes:GradientDescentModes",
     "slides.beales_plot:BealesGradientDescentPlot@opengl",
     "slides.adagrad:AdaGrad",
-    "slides.adagrad_weighted_ledger:AdaGradWeightedLedger",
     "slides.adagrad_bound_theorem:AdaGradBoundTheorem",
     "slides.beales_plot:BealesAdaGradPlot@opengl",
     "slides.beales_plot:BealesPlot@opengl",
