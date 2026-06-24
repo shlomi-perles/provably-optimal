@@ -116,12 +116,14 @@ class AdaGrad(Slide):
         adagrad_method_labels = VGroup(*(key[2] for key in method_keys))
 
         self.play(Write(title), Write(identity_equations))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(TransformMatchingTex(hessian_formula, hessian_diagonal))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             FadeIn(reminders.frame, reminders.dividers, *reminders.entries),
@@ -136,8 +138,9 @@ class AdaGrad(Slide):
             ),
             FadeOut(quadratic_model, gradient_formula, hessian_diagonal, eigendecomposition),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(Write(first_guess))
         self.play(
@@ -146,15 +149,17 @@ class AdaGrad(Slide):
             *(Write(paths[1]) for paths in known_paths),
             FadeIn(known_method_labels),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             *(Write(paths[2]) for paths in known_paths),
             FadeIn(adagrad_method_labels),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         diagonal_region = main_region.copy()
         diagonal_region.update(top=title)
@@ -173,8 +178,9 @@ class AdaGrad(Slide):
             *(Write(arrow) for arrow in diagonal_scaling[1]),
             FadeIn(diagonal_scaling[2]),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         second_guess_region = main_region.copy()
         second_guess_region.update(top=title)
@@ -235,12 +241,14 @@ class AdaGrad(Slide):
         self.play(FadeOut(*diagonal_scaling))
         self.play(Write(second_guess))
         self.play(Write(gradients_page))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.play(Unwrite(gradients_page_rest))
         self.play(Write(normalization_page))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()
 
     def _known_ruler_figures(

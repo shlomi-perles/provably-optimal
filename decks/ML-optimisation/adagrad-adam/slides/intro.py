@@ -22,4 +22,5 @@ class Intro(SimplexScene):
         self.play(Write(title_mob), Write(sub))
         self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()
