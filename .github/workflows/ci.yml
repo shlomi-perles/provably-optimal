@@ -16,8 +16,10 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y texlive-latex-extra texlive-fonts-recommended \
-                                  ffmpeg libcairo2-dev libpango1.0-dev
+          sudo apt-get install -y texlive-latex-extra texlive-fonts-recommended texlive-science \
+                                  ffmpeg fontconfig fonts-jetbrains-mono libcairo2-dev libpango1.0-dev \
+                                  libegl1 libgl1-mesa-dri libgles2
+          fc-match "JetBrains Mono" | grep -qi "JetBrainsMono"
 
       - name: Install uv
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
