@@ -211,6 +211,7 @@ class MomentumDampingRegimes(Slide):
                 critical_highlight,
             )
         )
+        self.next_slide()
         self.clear_scene()
 
     def _make_equation(self, region: Region) -> VGroup:

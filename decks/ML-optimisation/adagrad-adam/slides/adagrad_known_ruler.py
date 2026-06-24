@@ -94,4 +94,5 @@ class AdaGradKnownRuler(Slide):
         self.play(*(Write(paths[0]) for _, paths, _ in panels), FadeIn(legend[0]))
         self.play(*(Write(paths[1]) for _, paths, _ in panels), FadeIn(legend[1]))
         self.play(*(Write(paths[2]) for _, paths, _ in panels), FadeIn(legend[2:]))
+        self.next_slide()
         self.clear_scene()

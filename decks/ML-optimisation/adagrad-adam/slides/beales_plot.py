@@ -411,6 +411,7 @@ class BealesPlot(ThreeDSlide):
         self._rotate_camera()
         self.wait(self.cue_boundary_wait_time)
         self.fragment(title="Rotated view")
+        self.next_slide()
         self.clear_scene()
 
     def _trajectory_points(self) -> FloatArray:

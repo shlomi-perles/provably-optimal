@@ -96,4 +96,5 @@ class ReminderExample(Slide):
             horizontal_reminders.animate_remove(rate),
             problem.animate.shift(LEFT * SMALL_BUFF),
         )
+        self.next_slide()
         self.clear_scene()

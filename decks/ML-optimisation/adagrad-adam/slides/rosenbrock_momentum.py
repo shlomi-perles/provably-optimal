@@ -160,6 +160,7 @@ class MomentumRosenbrock(Slide):
             self.next_slide()
             self.play(beta @ beta_value, run_time=PARAMETER_SWEEP_RUN_TIME)
 
+        self.next_slide()
         self.clear_scene()
 
     def _make_axes(self) -> Axes:

@@ -2,11 +2,23 @@
 
 from __future__ import annotations
 
-from manim import TransformMatchingTex, Unwrite
+from manim import Mobject, TransformMatchingTex, Unwrite
 
 from slides.helpers.figure_helpers import *
 from slides.helpers.reminders import ReminderStack
 from slides.helpers.second_order import FORMULA_COLORS
+
+
+REMINDER_EQUATION_SCALE = 2
+
+
+def _reminder_equation(mobject: Mobject) -> Mobject:
+    equation = mobject.copy()
+    if hasattr(equation, "font_size"):
+        equation.font_size = float(equation.font_size) * REMINDER_EQUATION_SCALE
+        return equation
+    equation.scale(REMINDER_EQUATION_SCALE)
+    return equation
 
 
 class AdaGrad(Slide):
@@ -34,6 +46,9 @@ class AdaGrad(Slide):
             r"s_{t,i}": C_TEAL,
             r"x_t": FORMULA_COLORS[r"x_t"],
             r"x_{t+1}": FORMULA_COLORS[r"x_{t+1}"],
+            r"x_i": C_YELLOW,
+            r"x_j": C_YELLOW,
+            r"x_{t,i}": C_YELLOW,
         }
 
         quadratic_model = theme_math(
@@ -69,8 +84,10 @@ class AdaGrad(Slide):
             typography="caption",
         )
         _color_text_parts(adagrad_update, color_map)
+        adagrad_update_reminder = _reminder_equation(adagrad_update)
         reminders = ReminderStack(
-            [adagrad_update],
+            [adagrad_update_reminder],
+            width=screen_region.width - 2 * SMALL_BUFF,
             orientation="horizontal",
         )
         screen_region.place(reminders, DL, buff=SMALL_BUFF)
@@ -106,13 +123,14 @@ class AdaGrad(Slide):
             FadeIn(reminders.frame, reminders.dividers, *reminders.entries),
             reminders.animate_add_many(
                 [
-                    quadratic_model,
-                    gradient_formula,
-                    hessian_diagonal,
-                    eigendecomposition,
+                    _reminder_equation(quadratic_model).move_to(quadratic_model),
+                    _reminder_equation(gradient_formula).move_to(gradient_formula),
+                    _reminder_equation(hessian_diagonal).move_to(hessian_diagonal),
+                    _reminder_equation(eigendecomposition).move_to(eigendecomposition),
                 ],
                 from_existing=True,
             ),
+            FadeOut(quadratic_model, gradient_formula, hessian_diagonal, eigendecomposition),
         )
         self.next_slide()
 
@@ -177,18 +195,41 @@ class AdaGrad(Slide):
             r"\]"
             r"the vector update is"
             r"\["
-            r"\boxed{x_{t+1}=x_t-\eta D_t^{-1}g_t.}"
+            r"\boxed{x_{t+1}=x_t-\eta D_t^{-1} \nabla f(x_t)}"
             r"\]",
             page_width=second_guess_page_region,
         )
         color_substrings(gradients_page, color_map, probe_class=MathTex)
         second_guess_page_region.scale_and_place(
             gradients_page,
-            scale_kwargs={"max_scale": 1},
         )
+        first_gradient_equation = gradients_page.equation(0)
+        gradients_page_rest = VGroup(
+            *gradients_page.lines,
+            *gradients_page.equations[1:],
+        )
+        normalization_region = second_guess_page_region.copy()
+        normalization_region.update(top=first_gradient_equation)
+        normalization_page = TexPage(
+            r"For $f(x)$, the gradient is "
+            r"$\nabla f(x)_i = \lambda_i x_i$. Hence"
+            r"\["
+            r"\frac{\nabla f(x)_i}{\sqrt{\sum_{t=1}^{T} \nabla f(x_t)_i^2}}"
+            r"="
+            r"\frac{\lambda_i x_i}{\sqrt{\sum_{t=1}^{T} \lambda_i^2 x_{t,i}^2}}"
+            r"="
+            r"\frac{x_i}{\sqrt{\sum_{t=1}^{T} x_{t,i}^2}}"
+            r"\]",
+            page_width=normalization_region,
+        )
+        color_substrings(normalization_page, color_map, probe_class=MathTex)
+        normalization_region.scale_and_place(normalization_page)
         self.play(FadeOut(*diagonal_scaling))
         self.play(Write(second_guess))
         self.play(Write(gradients_page))
+        self.next_slide()
+        self.play(Unwrite(gradients_page_rest))
+        self.play(Write(normalization_page))
         self.next_slide()
         self.clear_scene()
 
