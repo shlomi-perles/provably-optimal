@@ -79,15 +79,12 @@ class AdaGradBoundTheorem(Slide):
         theorem_region.update(top=title)
 
         theorem_page = self._theorem_page(theorem_region, tex_template)
-        theorem_region.scale_and_place(
-            theorem_page,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
+        theorem_region.place(theorem_page)
 
         self.play(Write(title), Write(theorem_page))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Keep the useful facts")
+        self.wait(0.5)
 
         reminders = self._reminder_stack(screen_region, theorem_page, tex_template)
         work_region = self.region.copy()
@@ -103,8 +100,9 @@ class AdaGradBoundTheorem(Slide):
             ),
         )
         self.remove(theorem_page)
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Convexity opens the ledger")
+        self.wait(0.5)
 
         proof_page, definitions = self._proof_header(work_region, tex_template)
         self.play(Write(proof_page))
@@ -114,28 +112,32 @@ class AdaGradBoundTheorem(Slide):
         ledger_region.update(top=definitions, bottom=reminders)
         weighted, map_arrow, euclidean, weighted_points = self._ledger_figures(ledger_region)
         self.play(FadeIn(weighted), Write(map_arrow), FadeIn(euclidean))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Progress is the bracket")
+        self.wait(0.5)
 
         progress_marker = self._progress_marker(weighted, weighted_points)
         self.play(
-            Create(progress_marker[2]),
-            Create(progress_marker[0]),
+            Write(progress_marker[2]),
+            Write(progress_marker[0]),
             Write(progress_marker[1]),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Bound the progress account")
+        self.wait(0.5)
 
         p_bound = self._progress_bound(ledger_region, tex_template)
         self.play(FadeOut(weighted, map_arrow, euclidean, progress_marker))
         self.play(Write(p_bound))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Use the root-sum bound")
+        self.wait(0.5)
 
         root_sum = self._root_sum_bound(ledger_region, p_bound, tex_template)
         self.play(Write(root_sum))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()
 
     def _theorem_page(self, region, tex_template: TexTemplate) -> TexPage:
@@ -203,24 +205,9 @@ class AdaGradBoundTheorem(Slide):
 
     def _proof_header(self, region, tex_template: TexTemplate) -> tuple[TexPage, VGroup]:
         proof_region, definitions_region, _ = _split_rows(region, [0.95, 0.8, 2.75])
-        proof_page = TexPage(
-            r"Convexity gives "
-            r"$f(x_t)-f(x^\star)\le \ip{\nabla f(x_t)}{x_t-x^\star}$, then:"
-            r"\["
-            r"\eta\sum_{t=1}^{T}\bigl(f(x_t)-f(x^\star)\bigr)"
-            r"\le P+M,"
-            r"\]"
-            r"where",
-            page_width=proof_region,
-            tex_template=tex_template,
-            font_size=get_active_theme().typography.caption,
-        )
+        proof_page =  MathTex(r"$f(x_t)-f(x^\star)\le \ip{\nabla f(x_t)}{x_t-x^\star}$ \quad \rightarrow \quad \eta\sum_{t=1}^{T}\bigl(f(x_t)-f(x^\star)\bigr)")
         _color_adagrad_math(proof_page)
-        proof_region.scale_and_place(
-            proof_page,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
+        proof_region.scale_and_place(proof_page, buff=SMALL_BUFF)
 
         progress_account = _bound_math(
             r"P:="

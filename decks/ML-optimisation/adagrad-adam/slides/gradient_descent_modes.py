@@ -210,12 +210,14 @@ class GradientDescentModes(Slide):
         dynamic_mobjects.suspend_updating()
 
         self.play(Write(title), Write(identity_equations))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(TransformMatchingTex(hessian_formula, hessian_scalar))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             FadeIn(reminder_parts),
@@ -226,15 +228,17 @@ class GradientDescentModes(Slide):
             Unwrite(hessian_scalar),
             Write(derivation_equations[0]),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             Write(derivation_lines[0]),
             Write(derivation_equations[1]),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             Write(derivation_lines[-1]),
@@ -242,8 +246,9 @@ class GradientDescentModes(Slide):
             Write(mode_value_equation),
             Create(gd_mode_sum_frame),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         reminders.generate_target()
         if reminders.target.width > ZERO_AXIS_EPSILON:
@@ -280,8 +285,9 @@ class GradientDescentModes(Slide):
         )
         dynamic_mobjects.resume_updating()
         dynamic_mobjects.update(0)
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Overshoot the balanced step")
+        self.wait(0.5)
         self.play(
             eta @ eta_overshoot,
             run_time=3.0,
@@ -291,8 +297,9 @@ class GradientDescentModes(Slide):
                 eta_end=eta_overshoot,
             ),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Balance the endpoints")
+        self.wait(0.5)
         self.play(
             eta @ eta_balanced,
             run_time=1.8,
@@ -302,8 +309,9 @@ class GradientDescentModes(Slide):
                 eta_end=eta_balanced,
             ),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Return to the steep safe step")
+        self.wait(0.5)
         self.play(
             eta @ eta_safe,
             run_time=3.0,
@@ -315,6 +323,7 @@ class GradientDescentModes(Slide):
         )
         self.wait()
         self.next_slide()
+        self.wait(0.5)
         self.play(
             mode_factor_iteration @ MODE_FACTOR_DOT_FINAL_STEP,
             run_time=3.0,
@@ -323,8 +332,9 @@ class GradientDescentModes(Slide):
         dynamic_mobjects.suspend_updating()
         self.wait(2)
 
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         rate_summary_region = equations_region.copy()
         rate_summary_region.update(top=compact_mode_sum, bottom=left_figure.get_bottom())
@@ -371,9 +381,11 @@ class GradientDescentModes(Slide):
         )
         self.play(FadeOut(left_figure))
         self.play(Write(balance_condition))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.play(Write(convergence_bound), Write(iteration_bound), Write(rho_star))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()

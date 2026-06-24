@@ -28,13 +28,15 @@ SOURCE_CONTOUR_OPACITY = 0.56
 SOURCE_CONTOUR_STROKE_WIDTH = 0.58
 SOURCE_FIGURE_WIDTH = 8.9
 SOURCE_PATH_STROKE_WIDTH = 1.25
-SOURCE_PREVIOUS_ARROW_STROKE_WIDTH = 1.55
-SOURCE_CORRECTION_STROKE_WIDTH = 1.75
-SOURCE_DASHED_STROKE_WIDTH = 1.25
+SOURCE_ARROW_STROKE_WIDTH = 3.0
+SOURCE_PREVIOUS_ARROW_STROKE_WIDTH = SOURCE_ARROW_STROKE_WIDTH
+SOURCE_CORRECTION_STROKE_WIDTH = SOURCE_ARROW_STROKE_WIDTH
+SOURCE_DASHED_STROKE_WIDTH = SOURCE_ARROW_STROKE_WIDTH
 SOURCE_SCATTER_AREA = 46.0
 SOURCE_BRACE_BULGE_RATIO = 0.06
 SOURCE_BRACE_LABEL_OFFSET_RATIO = 0.04
 SOURCE_MEMORY_BRACE_STROKE_WIDTH = 2.6
+SOURCE_EDGE_LABEL_OFFSET_RATIO = 1 / 38
 ELLIPSE_SAMPLE_COUNT = 320
 CLIP_EPSILON = 1e-9
 
@@ -44,7 +46,7 @@ PLOT_Y_TO_X_RATIO = (SOURCE_Y_LIMITS[1] - SOURCE_Y_LIMITS[0]) / (
     SOURCE_X_LIMITS[1] - SOURCE_X_LIMITS[0]
 )
 PLOT_X_LENGTH = SOURCE_FIGURE_WIDTH
-PLOT_Y_LENGTH = PLOT_X_LENGTH * PLOT_Y_TO_X_RATIO
+PLOT_Y_LENGTH = PLOT_X_LENGTH
 SOURCE_AXIS_HEIGHT_POINTS = SOURCE_FIGURE_WIDTH * PLOT_Y_TO_X_RATIO * 72.0
 SOURCE_DOT_FRAME_HEIGHT_RATIO = np.sqrt(SOURCE_SCATTER_AREA / np.pi) / SOURCE_AXIS_HEIGHT_POINTS
 PLOT_FRAME_FILL_OPACITY = 0.18
@@ -82,6 +84,7 @@ class MomentumStepGeometry(Slide):
     def construct(self) -> None:
         title = _start_slide(self, SLIDE_TITLE)
         body_region = self.region.copy()
+        body_region.update(top=title)
 
         matrix, _ = _rotated_quadratic_matrix()
         heavy_ball = self._step_panel(
@@ -97,8 +100,9 @@ class MomentumStepGeometry(Slide):
         )
 
         self.play(Write(title), Write(heavy_ball))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Nesterov look-ahead")
+        self.wait(0.5)
 
         left_region, right_region = _split_weighted(body_region, [1, 1])
         heavy_ball.generate_target()
@@ -123,10 +127,12 @@ class MomentumStepGeometry(Slide):
         )
 
         self.play(MoveToTarget(heavy_ball), FadeIn(nesterov, shift=RIGHT * SMALL_BUFF))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Heavy ball vs. Nesterov")
-        self.wait(0.4)
+        self.wait(0.5)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()
 
     def _heavy_ball_step(self, matrix: FloatArray) -> StepData:
@@ -203,7 +209,13 @@ class MomentumStepGeometry(Slide):
             color=C_ORANGE if show_current_gradient else C_BLUE,
             width=SOURCE_CORRECTION_STROKE_WIDTH,
         ).set_z_index(LAYER_MARKERS)
-        memory_brace, memory_label = self._memory_brace(axes, data.x_t, data.lookahead)
+        label_reference = self._label_reference(data)
+        memory_brace, memory_label = self._memory_brace(
+            axes,
+            data.x_t,
+            data.lookahead,
+            label_reference,
+        )
         markers = self._markers_and_labels(axes, data)
         correction_label = self._label_between(
             axes,
@@ -211,7 +223,7 @@ class MomentumStepGeometry(Slide):
             data.x_next,
             data.correction_label,
             color=C_ORANGE if show_current_gradient else C_BLUE,
-            direction=LEFT if show_current_gradient else RIGHT,
+            reference=label_reference,
         )
 
         extras = VGroup()
@@ -230,7 +242,7 @@ class MomentumStepGeometry(Slide):
                     data.gradient_only_point,
                     r"-\eta\nabla f(x_t)",
                     color=C_MUTED,
-                    direction=RIGHT,
+                    reference=label_reference,
                 ),
             )
 
@@ -249,7 +261,7 @@ class MomentumStepGeometry(Slide):
                     data.lookahead,
                     r"y_t=x_t+\gamma(x_t-x_{t-1})",
                     color=C_ORANGE,
-                    direction=UP,
+                    reference=label_reference,
                 ),
             )
 
@@ -268,7 +280,7 @@ class MomentumStepGeometry(Slide):
                     data.x_next,
                     r"\text{net step}",
                     color=C_PURPLE,
-                    direction=LEFT,
+                    reference=label_reference,
                 ),
             )
 
@@ -411,13 +423,16 @@ class MomentumStepGeometry(Slide):
 
         return start + lower * delta, start + upper * delta
 
-    def _memory_brace(self, axes: Axes, start: FloatArray, end: FloatArray) -> tuple[VMobject, MathTex]:
+    def _memory_brace(
+        self,
+        axes: Axes,
+        start: FloatArray,
+        end: FloatArray,
+        reference: FloatArray,
+    ) -> tuple[VMobject, MathTex]:
         segment = end - start
         length = float(np.linalg.norm(segment))
-        tangent = segment / max(length, ZERO_AXIS_EPSILON)
-        normal = np.array([-tangent[1], tangent[0]], dtype=np.float64)
-        if normal[0] < 0:
-            normal = -normal
+        normal = self._inner_edge_normal(start, end, reference)
         bulge = SOURCE_BRACE_BULGE_RATIO * length
 
         def point(along: float, out: float) -> FloatArray:
@@ -489,18 +504,48 @@ class MomentumStepGeometry(Slide):
         tex: str,
         *,
         color: str,
-        direction: FloatArray,
+        reference: FloatArray | None = None,
+        direction: FloatArray | None = None,
     ) -> MathTex:
         label = theme_math(tex, color=color, typography="caption")
         midpoint = 0.5 * (start + end)
         data_span = SOURCE_Y_LIMITS[1] - SOURCE_Y_LIMITS[0]
-        offset = np.asarray(direction[:2], dtype=np.float64)
-        if np.linalg.norm(offset) > ZERO_AXIS_EPSILON:
-            offset = offset / np.linalg.norm(offset) * (data_span / 38)
+        if reference is not None:
+            offset = self._inner_edge_normal(start, end, reference) * (
+                data_span * SOURCE_EDGE_LABEL_OFFSET_RATIO
+            )
+        elif direction is not None:
+            offset = np.asarray(direction[:2], dtype=np.float64)
+            if np.linalg.norm(offset) > ZERO_AXIS_EPSILON:
+                offset = offset / np.linalg.norm(offset) * (
+                    data_span * SOURCE_EDGE_LABEL_OFFSET_RATIO
+                )
+        else:
+            offset = np.zeros(2, dtype=np.float64)
         label.move_to(axes.c2p(float(midpoint[0] + offset[0]), float(midpoint[1] + offset[1])))
         _color_text_parts(label, FORMULA_COLORS)
         label.set_z_index(LAYER_MARKERS)
         return label
+
+    @staticmethod
+    def _label_reference(data: StepData) -> FloatArray:
+        return np.mean(
+            np.vstack([data.x_prev, data.x_t, data.lookahead, data.x_next]),
+            axis=0,
+        )
+
+    @staticmethod
+    def _inner_edge_normal(start: FloatArray, end: FloatArray, reference: FloatArray) -> FloatArray:
+        segment = end - start
+        normal = np.array([-segment[1], segment[0]], dtype=np.float64)
+        normal_norm = np.linalg.norm(normal)
+        if normal_norm <= ZERO_AXIS_EPSILON:
+            return np.zeros(2, dtype=np.float64)
+        normal = normal / normal_norm
+        midpoint = 0.5 * (start + end)
+        if np.dot(reference - midpoint, normal) < 0:
+            normal = -normal
+        return normal
 
     def _dashed_arrow(
         self,

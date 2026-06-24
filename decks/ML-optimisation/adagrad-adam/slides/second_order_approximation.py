@@ -988,8 +988,9 @@ class SecondOrderApproximation(Slide):
             Write(hessian_legend),
             Write(hessian_equation),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             Transform(hessian_equation, hessian_equation_top),
@@ -1003,8 +1004,9 @@ class SecondOrderApproximation(Slide):
             grow_legend_background(3),
             Write(alpha_legend),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             Write(upper_model),
@@ -1014,12 +1016,14 @@ class SecondOrderApproximation(Slide):
             grow_legend_background(4),
             Write(beta_legend),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         play_view_scale(zoom_out_scale)
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         track_bound_model(
             lower_model,
@@ -1030,8 +1034,9 @@ class SecondOrderApproximation(Slide):
         )
         self.play(alpha_anchor @ alpha_sweep_x, run_time=2)
         self.play(alpha_anchor @ x_t, run_time=2)
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         for mob in (lower_model, alpha_marker):
             mob.clear_updaters()
@@ -1045,8 +1050,9 @@ class SecondOrderApproximation(Slide):
         self.play(beta_anchor @ beta_sweep_x, run_time=2)
         self.play(beta_anchor @ beta_left_sweep_x, run_time=2)
         self.play(beta_anchor @ x_t, run_time=2)
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         for mob in (upper_model, beta_marker):
             mob.clear_updaters()
@@ -1059,21 +1065,25 @@ class SecondOrderApproximation(Slide):
 
         play_view_scale(1)
         self.play(Write(derivative_equation))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(Write(first_down_arrow), Write(newton_delta_equation))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(Write(second_down_arrow), Write(newton_update), Write(delta_relation_note))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(Write(next_line), Write(next_tick), Write(delta_bracket), Write(delta_label))
         self.play(Create(newton_frame))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             Unwrite(derivative_equation),
@@ -1086,8 +1096,12 @@ class SecondOrderApproximation(Slide):
             Transform(highlighted_newton, highlighted_newton_top),
         )
         self.play(Write(convergence_note))
-        self.play(FadeIn(computer_fire))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
+        self.play(FadeIn(computer_fire))
+        self.wait(2)
+        self.next_slide()
+        self.wait(0.5)
 
         self.clear_scene()

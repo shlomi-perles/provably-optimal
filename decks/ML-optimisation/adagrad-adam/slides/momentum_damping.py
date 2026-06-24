@@ -1,4 +1,4 @@
-"""Momentum damping regimes controlled by beta."""
+"""Momentum damping regimes controlled by gamma."""
 
 from __future__ import annotations
 
@@ -42,13 +42,13 @@ from slides.helpers.controls import (
 )
 from slides.helpers.figure_helpers import _split_rows, _split_weighted, _start_slide, theme_math
 from slides.helpers.style import (
-    C_BLUE,
     C_FRAME,
     C_GREEN,
     C_MUTED,
     C_ORANGE,
     C_PANEL,
     C_PANEL_DEEP,
+    C_PURPLE,
     C_TEXT,
     C_YELLOW,
     LAYER_MARKERS,
@@ -62,8 +62,8 @@ from slides.helpers.style import (
 type FloatArray = npt.NDArray[np.float64]
 
 
-C_ALPHA = C_ORANGE
-C_BETA = C_BLUE
+C_ETA = C_ORANGE
+C_GAMMA = C_PURPLE
 C_CRITICAL = C_GREEN
 C_UNDER = C_ORANGE
 C_OVER = C_MUTED
@@ -89,15 +89,15 @@ AXIS_OPACITY = SLIDER_TICK_OPACITY
 BETA_TICK_COUNT = 6
 BETA_SWEEP_RUN_TIME = 2.0
 PANEL_INSET = MED_SMALL_BUFF
-PANEL_ROW_RATIOS = (0.9, 1.2, 2.4)
+PANEL_ROW_RATIOS = (1, 4)
 
 FORMULA_COLORS = {
-    r"\alpha": C_ALPHA,
-    r"\beta": C_BETA,
-    r"\beta_\star": C_CRITICAL,
+    r"\eta": C_ETA,
+    r"\gamma": C_GAMMA,
+    r"\gamma_\star": C_CRITICAL,
     r"\lambda": C_GREEN,
-    r"v_t": C_BETA,
-    r"v_{t+1}": C_BETA,
+    r"\nabla f(x_t)": C_ETA,
+    r"x_{t-1}": C_YELLOW,
     r"x_t": C_YELLOW,
     r"x_{t+1}": C_YELLOW,
     r"x^\star": C_TEXT,
@@ -109,7 +109,6 @@ class DampingSpec:
     title: str
     beta: float
     color: str
-    body: str
 
 
 class MomentumDampingRegimes(Slide):
@@ -135,8 +134,6 @@ class MomentumDampingRegimes(Slide):
                 "Underdamping",
                 UNDERDAMPED_BETA,
                 C_UNDER,
-                r"\raggedright Large $\beta$ keeps velocity alive. "
-                r"The mode crosses $x^\star$, comes back, and crosses again.",
             ),
             under_beta,
         )
@@ -146,8 +143,6 @@ class MomentumDampingRegimes(Slide):
                 "Critical damping",
                 CRITICAL_BETA,
                 C_CRITICAL,
-                r"\raggedright At $\beta_\star$ the roots repeat: "
-                r"the mode returns as fast as possible without oscillating.",
             ),
             CRITICAL_BETA,
         )
@@ -157,8 +152,6 @@ class MomentumDampingRegimes(Slide):
                 "Overdamping",
                 OVERDAMPED_BETA,
                 C_OVER,
-                r"\raggedright Small $\beta$ forgets velocity. "
-                r"Each step is safe, but useful kinetic energy is bled away.",
             ),
             over_beta,
         )
@@ -174,38 +167,45 @@ class MomentumDampingRegimes(Slide):
         critical_highlight.set_stroke(C_CRITICAL, width=PHASE_STROKE_WIDTH)
 
         self.play(Write(title), Write(equation), Write(beta_track))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(Write(connectors[0]), FadeIn(under_panel, shift=DOWN * SMALL_BUFF))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             Write(connectors[1]),
             FadeIn(critical_panel, shift=DOWN * SMALL_BUFF),
             Write(critical_rule),
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(Write(connectors[2]), FadeIn(over_panel, shift=DOWN * SMALL_BUFF))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(under_beta @ UNDERDAMPED_SWEEP_BETA, run_time=BETA_SWEEP_RUN_TIME)
         self.play(under_beta @ UNDERDAMPED_BETA, run_time=BETA_SWEEP_RUN_TIME)
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(over_beta @ OVERDAMPED_SWEEP_BETA, run_time=BETA_SWEEP_RUN_TIME)
         self.play(over_beta @ OVERDAMPED_BETA, run_time=BETA_SWEEP_RUN_TIME)
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(Create(critical_highlight), Indicate(connectors[1]))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
 
         self.play(
             FadeOut(
@@ -218,15 +218,14 @@ class MomentumDampingRegimes(Slide):
                 critical_highlight,
             )
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()
 
     def _make_equation(self, region: Region) -> VGroup:
         update = theme_math(
-            r"v_{t+1}=\beta v_t+\nabla f(x_t)",
-            r"\qquad",
-            r"x_{t+1}=x_t-\alpha v_{t+1}",
+            r"x_{t+1}=x_t+\gamma(x_t-x_{t-1})-\eta\nabla f(x_t)",
         )
         color_substrings(update, FORMULA_COLORS)
         note = TexPage(
@@ -241,7 +240,7 @@ class MomentumDampingRegimes(Slide):
 
     def _make_critical_rule(self, region: Region) -> MathTex:
         rule = theme_math(
-            r"\beta_\star=(1-\sqrt{\alpha\lambda})^2",
+            r"\gamma_\star=(1-\sqrt{\eta\lambda})^2",
             color=C_TEXT,
             typography="caption",
         )
@@ -255,7 +254,7 @@ class MomentumDampingRegimes(Slide):
         under_beta: VT,
         over_beta: VT,
     ) -> tuple[VGroup, Line]:
-        label = theme_math(r"\beta", color=C_BETA)
+        label = theme_math(r"\gamma", color=C_GAMMA)
         half_length = max(
             SMALL_BUFF,
             (region.width - label.width - 3 * MED_LARGE_BUFF) / 2,
@@ -317,7 +316,7 @@ class MomentumDampingRegimes(Slide):
         region.place(shell)
 
         inner = self._inset(region, PANEL_INSET)
-        header_region, body_region, plot_region = _split_rows(inner, PANEL_ROW_RATIOS)
+        header_region, plot_region = _split_rows(inner, PANEL_ROW_RATIOS)
 
         header = VGroup(
             self._panel_title(spec),
@@ -325,18 +324,8 @@ class MomentumDampingRegimes(Slide):
         ).arrange(RIGHT, buff=MED_SMALL_BUFF)
         header_region.scale_and_place(header, buff=SMALL_BUFF, scale_kwargs={"max_scale": 1})
 
-        body = TexPage(
-            spec.body,
-            page_width=body_region,
-            buff=SMALL_BUFF,
-            font_size=get_active_theme().typography.caption,
-            color=C_TEXT,
-        )
-        color_substrings(body, FORMULA_COLORS, probe_class=MathTex)
-        body_region.scale_and_place(body, buff=SMALL_BUFF, scale_kwargs={"max_scale": 1})
-
         plot = self._phase_plot(plot_region, beta, spec.color)
-        return VGroup(shell, header, body, plot)
+        return VGroup(shell, header, plot)
 
     def _panel_title(self, spec: DampingSpec) -> MathTex:
         title = MathTex(
@@ -347,7 +336,7 @@ class MomentumDampingRegimes(Slide):
         return title
 
     def _beta_readout(self, beta: VT | float, color: str) -> VGroup:
-        label = theme_math(r"\beta=", color=C_BETA, typography="caption")
+        label = theme_math(r"\gamma=", color=C_GAMMA, typography="caption")
 
         def value() -> float:
             return float(~beta) if isinstance(beta, VT) else float(beta)
@@ -357,7 +346,7 @@ class MomentumDampingRegimes(Slide):
         return VGroup(label, number).arrange(RIGHT, buff=SMALL_BUFF)
 
     def _phase_plot(self, region: Region, beta: VT | float, color: str) -> VGroup:
-        frame_region = self._inset(region, SMALL_BUFF)
+        frame_region = self._square_region(self._inset(region, SMALL_BUFF))
         frame = RoundedRectangle(
             width=frame_region.width,
             height=frame_region.height,
@@ -425,12 +414,12 @@ class MomentumDampingRegimes(Slide):
     def _phase_points(self, beta: float) -> FloatArray:
         clipped_beta = float(np.clip(beta, *BETA_RANGE))
         position = INITIAL_POSITION
-        velocity = INITIAL_VELOCITY
+        displacement = INITIAL_VELOCITY
         points: list[tuple[float, float]] = []
         for _ in range(PHASE_STEP_COUNT):
-            points.append((-velocity, position))
-            velocity = clipped_beta * velocity + position
-            position -= MOMENTUM_STEP_PRODUCT * velocity
+            points.append((displacement, position))
+            displacement = clipped_beta * displacement - MOMENTUM_STEP_PRODUCT * position
+            position += displacement
         return np.asarray(points, dtype=np.float64)
 
     def _make_connectors(
@@ -482,4 +471,17 @@ class MomentumDampingRegimes(Slide):
             bottom=region.bottom + buff,
             left=region.left + buff,
             right=region.right - buff,
+        )
+
+    @staticmethod
+    def _square_region(region: Region) -> Region:
+        side = min(region.width, region.height)
+        center_x = (region.left + region.right) / 2
+        center_y = (region.top + region.bottom) / 2
+        half_side = side / 2
+        return Region(
+            top=center_y + half_side,
+            bottom=center_y - half_side,
+            left=center_x - half_side,
+            right=center_x + half_side,
         )

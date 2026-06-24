@@ -252,17 +252,20 @@ class AdaGradLocalSqueeze(ThreeDSlide):
                 fix_in_frame()
 
         self.play(Write(title), FadeIn(axes, axis_labels), Create(surface), FadeIn(hud_panel[0]), Write(bar))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Choose a point")
+        self.wait(0.5)
         self.play(FadeIn(current, current_label), Write(equation[0]))
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(title="Diagonal quadratic patch")
+        self.wait(0.5)
         self.play(Create(patch), Write(equation[1:]))
         self.move_camera(
             phi=FINAL_CAMERA_PHI,
             theta=FINAL_CAMERA_THETA,
             run_time=CAMERA_MOVE_RUN_TIME,
         )
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()

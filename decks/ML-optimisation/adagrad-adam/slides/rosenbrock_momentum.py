@@ -1,4 +1,4 @@
-"""Momentum gradient descent on Rosenbrock, with live alpha/beta controls."""
+"""Momentum gradient descent on Rosenbrock, with live eta/gamma controls."""
 
 from __future__ import annotations
 
@@ -46,11 +46,13 @@ from slides.helpers.plotting import (
 from slides.helpers.style import (
     C_CONTOUR,
     C_FRAME,
+    C_GREEN,
     C_MUTED,
     C_OPTIMUM,
     C_OPTIMUM_STROKE,
     C_ORANGE,
     C_PANEL,
+    C_PURPLE,
     C_YELLOW,
     LAYER_CONTOUR,
     LAYER_FRAME,
@@ -71,19 +73,19 @@ OPTIMUM = np.array([1.0, 1.0 / 3.0], dtype=np.float64)
 N_STEPS = 80
 ROSEN_Y_SCALE = 3.0
 ROSEN_CURVATURE = 20.0
-INITIAL_ALPHA = 0.0016
-INITIAL_BETA = 0.74
-ALPHA_SLIDER_RANGE = (0.0, 0.006)
-BETA_SLIDER_RANGE = (0.0, 0.99)
-ALPHA_DECIMALS = 4
-BETA_DECIMALS = 2
-ALPHA_SWEEP_VALUES = (0.004, INITIAL_ALPHA)
-BETA_SWEEP_VALUES = (0.9, 0.93, 0.2)
+INITIAL_ETA = 0.0016
+INITIAL_GAMMA = 0.74
+ETA_SLIDER_RANGE = (0.0, 0.006)
+GAMMA_SLIDER_RANGE = (0.0, 0.99)
+ETA_DECIMALS = 4
+GAMMA_DECIMALS = 2
+ETA_SWEEP_VALUES = (0.004, INITIAL_ETA)
+GAMMA_SWEEP_VALUES = (0.9, 0.93, 0.2)
 PARAMETER_SWEEP_RUN_TIME = 2.4
 
-C_PATH = C_ORANGE
-C_ALPHA = C_PATH
-C_BETA = "#2F65C8"
+C_PATH = C_GREEN
+C_ETA = C_ORANGE
+C_GAMMA = C_PURPLE
 X_0_COLOR = C_YELLOW
 MAX_POINT_NORM = 1e3
 PLOT_X_LENGTH = 12.4
@@ -115,11 +117,12 @@ MOMENTUM_SLIDER_HALF_LENGTH = 1.05
 
 
 class MomentumRosenbrock(Slide):
-    """Illustrate how alpha and beta reshape momentum GD on Rosenbrock contours."""
+    """Illustrate how eta and gamma reshape momentum GD on Rosenbrock contours."""
 
     def construct(self) -> None:
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide(name="Momentum on Rosenbrock")
+        self.wait(0.5)
 
         title = Title(
             r"Momentum gradient descent on the Rosenbrock function",
@@ -127,17 +130,17 @@ class MomentumRosenbrock(Slide):
         self.region.place(title, UP)
         self.region.update(top=title)
 
-        alpha = VT(INITIAL_ALPHA)
-        beta = VT(INITIAL_BETA)
+        eta = VT(INITIAL_ETA)
+        gamma = VT(INITIAL_GAMMA)
         axes = self._make_axes()
         heatmap = self._make_heatmap(axes).set_z_index(LAYER_HEATMAP)
         contours = self._make_contours(axes).set_z_index(LAYER_CONTOUR)
-        trajectory = self._make_trajectory(axes, alpha, beta).set_z_index(LAYER_TRAJECTORY)
+        trajectory = self._make_trajectory(axes, eta, gamma).set_z_index(LAYER_TRAJECTORY)
         markers = self._make_static_markers(axes).set_z_index(LAYER_MARKERS)
         frame = _plot_frame(axes).set_z_index(LAYER_FRAME)
         plot = Group(axes, heatmap, contours, trajectory, frame, markers)
 
-        controls = self._make_controls(alpha, beta)
+        controls = self._make_controls(eta, gamma)
         plot_region, control_region = self.region.split_regions(DOWN, 2)
         plot_region.scale_and_place(plot, buff=SMALL_BUFF)
         control_region.scale_and_place(controls)
@@ -153,18 +156,21 @@ class MomentumRosenbrock(Slide):
         self.add_foreground_mobjects(markers)
         self.play(FadeIn(controls))
 
-        for alpha_value in ALPHA_SWEEP_VALUES:
-            self.wait(0.4)
+        for eta_value in ETA_SWEEP_VALUES:
+            self.wait(2)
             self.next_slide()
-            self.play(alpha @ alpha_value, run_time=PARAMETER_SWEEP_RUN_TIME)
+            self.wait(0.5)
+            self.play(eta @ eta_value, run_time=PARAMETER_SWEEP_RUN_TIME)
 
-        for beta_value in BETA_SWEEP_VALUES:
-            self.wait(0.4)
+        for gamma_value in GAMMA_SWEEP_VALUES:
+            self.wait(2)
             self.next_slide()
-            self.play(beta @ beta_value, run_time=PARAMETER_SWEEP_RUN_TIME)
+            self.wait(0.5)
+            self.play(gamma @ gamma_value, run_time=PARAMETER_SWEEP_RUN_TIME)
 
-        self.wait(0.4)
+        self.wait(2)
         self.next_slide()
+        self.wait(0.5)
         self.clear_scene()
 
     def _make_axes(self) -> Axes:
@@ -241,33 +247,35 @@ class MomentumRosenbrock(Slide):
 
         return VGroup(start, optimum_halo, optimum, start_label, optimum_label)
 
-    def _make_controls(self, alpha: VT, beta: VT) -> VGroup:
+    def _make_controls(self, eta: VT, gamma: VT) -> VGroup:
         theme = get_active_theme()
         equation = MathTex(
-            r"v_{t+1}=\beta v_t+\nabla f(x_t)\qquad x_{t+1}=x_t-\alpha v_{t+1}",
+            r"x_{t+1}=x_t+\gamma(x_t-x_{t-1})-\eta\nabla f(x_t)",
             font_size=theme.typography.body,
         )
         color_substrings(
             equation,
             {
-                r"x_{t+1}": X_0_COLOR,
-                r"x_t": X_0_COLOR,
-                r"\alpha": C_ALPHA,
-                r"\beta": C_BETA,
+                r"x_{t-1}": C_PATH,
+                r"x_t": C_PATH,
+                r"x_{t+1}": C_PATH,
+                r"\eta": C_ETA,
+                r"\gamma": C_GAMMA,
+                r"\nabla f(x_t)": C_ETA,
             },
         )
 
-        alpha_slider = self._slider(
-            alpha,
-            SliderSpec(r"\alpha", *ALPHA_SLIDER_RANGE, ALPHA_DECIMALS, C_ALPHA),
+        eta_slider = self._slider(
+            eta,
+            SliderSpec(r"\eta", *ETA_SLIDER_RANGE, ETA_DECIMALS, C_ETA),
         )
-        beta_slider = self._slider(
-            beta,
-            SliderSpec(r"\beta", *BETA_SLIDER_RANGE, BETA_DECIMALS, C_BETA),
+        gamma_slider = self._slider(
+            gamma,
+            SliderSpec(r"\gamma", *GAMMA_SLIDER_RANGE, GAMMA_DECIMALS, C_GAMMA),
         )
 
-        readout = self._make_path_readout(alpha, beta)
-        sliders = VGroup(alpha_slider, beta_slider).arrange(RIGHT, buff=MED_LARGE_BUFF)
+        readout = self._make_path_readout(eta, gamma)
+        sliders = VGroup(eta_slider, gamma_slider).arrange(RIGHT, buff=MED_LARGE_BUFF)
         controls = VGroup(equation, sliders, readout).arrange(RIGHT, buff=MED_LARGE_BUFF)
         panel = self._panel(controls)
         return VGroup(panel, controls)
@@ -282,8 +290,8 @@ class MomentumRosenbrock(Slide):
             value_font_size=theme.typography.caption,
         )
 
-    def _make_trajectory(self, axes: Axes, alpha: VT, beta: VT) -> VGroup:
-        points = self._momentum_points(~alpha, ~beta)
+    def _make_trajectory(self, axes: Axes, eta: VT, gamma: VT) -> VGroup:
+        points = self._momentum_points(~eta, ~gamma)
         frame = _plot_frame(axes)
         step_dot_radius = frame.height * STEP_DOT_FRAME_HEIGHT_RATIO
         head_dot_radius = frame.height * HEAD_DOT_FRAME_HEIGHT_RATIO
@@ -302,7 +310,7 @@ class MomentumRosenbrock(Slide):
 
         self._attach_start_updater(dots[0], axes)
         for previous, dot in pairwise(dots):
-            self._attach_step_updater(dot, previous, axes, alpha, beta)
+            self._attach_step_updater(dot, previous, axes, eta, gamma)
 
         connectors = VGroup()
         for start, end in pairwise(dots):
@@ -323,7 +331,7 @@ class MomentumRosenbrock(Slide):
 
         return VGroup(dots, connectors, head_ring)
 
-    def _make_path_readout(self, alpha: VT, beta: VT) -> VGroup:
+    def _make_path_readout(self, eta: VT, gamma: VT) -> VGroup:
         theme = get_active_theme()
         steps = DN(
             lambda: N_STEPS,
@@ -331,7 +339,7 @@ class MomentumRosenbrock(Slide):
             font_size=theme.typography.caption,
         )
         distance = DN(
-            lambda: self._path_distance(~alpha, ~beta),
+            lambda: self._path_distance(~eta, ~gamma),
             num_decimal_places=2,
             font_size=theme.typography.caption,
         )
@@ -345,11 +353,11 @@ class MomentumRosenbrock(Slide):
         readout.set_color(C_MUTED)
         return readout
 
-    def _path_distance(self, alpha: float, beta: float) -> float:
-        points = self._momentum_points(alpha, beta)
+    def _path_distance(self, eta: float, gamma: float) -> float:
+        points = self._momentum_points(eta, gamma)
         return float(np.linalg.norm(points[-1] - OPTIMUM))
 
-    def _momentum_points(self, alpha: float, beta: float) -> FloatArray:
+    def _momentum_points(self, eta: float, gamma: float) -> FloatArray:
         point = START.copy()
         velocity = np.zeros(2, dtype=np.float64)
         points = [point.copy()]
@@ -359,7 +367,7 @@ class MomentumRosenbrock(Slide):
             if stopped:
                 points.append(point.copy())
                 continue
-            candidate, velocity = self._next_momentum_point(point, velocity, alpha, beta)
+            candidate, velocity = self._next_momentum_point(point, velocity, eta, gamma)
             if not np.all(np.isfinite(candidate)) or np.linalg.norm(candidate) > MAX_POINT_NORM:
                 stopped = True
             else:
@@ -392,11 +400,11 @@ class MomentumRosenbrock(Slide):
         self,
         point: FloatArray,
         velocity: FloatArray,
-        alpha: float,
-        beta: float,
+        eta: float,
+        gamma: float,
     ) -> tuple[FloatArray, FloatArray]:
-        next_velocity = beta * velocity + self._banana_gradient(point)
-        return point - alpha * next_velocity, next_velocity
+        next_velocity = gamma * velocity - eta * self._banana_gradient(point)
+        return point + next_velocity, next_velocity
 
     def _attach_start_updater(self, dot: Dot, axes: Axes) -> None:
         dot.momentum_point = START.copy()
@@ -409,14 +417,14 @@ class MomentumRosenbrock(Slide):
         dot: Dot,
         previous: Dot,
         axes: Axes,
-        alpha: VT,
-        beta: VT,
+        eta: VT,
+        gamma: VT,
     ) -> None:
         dot.momentum_point = START.copy()
         dot.momentum_velocity = np.zeros(2, dtype=np.float64)
         dot.momentum_visible = True
         dot.add_updater(
-            lambda mob: self._update_step_dot(mob, previous, axes, ~alpha, ~beta)
+            lambda mob: self._update_step_dot(mob, previous, axes, ~eta, ~gamma)
         )
 
     def _update_start_dot(self, dot: Dot, axes: Axes) -> None:
@@ -431,14 +439,14 @@ class MomentumRosenbrock(Slide):
         dot: Dot,
         previous: Dot,
         axes: Axes,
-        alpha: float,
-        beta: float,
+        eta: float,
+        gamma: float,
     ) -> None:
         point, velocity = self._next_momentum_point(
             previous.momentum_point,
             previous.momentum_velocity,
-            alpha,
-            beta,
+            eta,
+            gamma,
         )
         if not np.all(np.isfinite(point)) or np.linalg.norm(point) > MAX_POINT_NORM:
             point = previous.momentum_point.copy()
