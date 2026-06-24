@@ -118,6 +118,7 @@ class MomentumRosenbrock(Slide):
     """Illustrate how alpha and beta reshape momentum GD on Rosenbrock contours."""
 
     def construct(self) -> None:
+        self.wait(0.4)
         self.next_slide(name="Momentum on Rosenbrock")
 
         title = Title(
@@ -153,13 +154,16 @@ class MomentumRosenbrock(Slide):
         self.play(FadeIn(controls))
 
         for alpha_value in ALPHA_SWEEP_VALUES:
+            self.wait(0.4)
             self.next_slide()
             self.play(alpha @ alpha_value, run_time=PARAMETER_SWEEP_RUN_TIME)
 
         for beta_value in BETA_SWEEP_VALUES:
+            self.wait(0.4)
             self.next_slide()
             self.play(beta @ beta_value, run_time=PARAMETER_SWEEP_RUN_TIME)
 
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()
 
