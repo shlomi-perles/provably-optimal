@@ -44,8 +44,10 @@ class AdaGradDiagonalScaling(Slide):
         note_region.scale_and_place(note, buff=SMALL_BUFF)
 
         self.play(Write(title), *(FadeIn(before) for before, _, _ in row_groups))
+        self.wait(0.4)
         self.next_slide(title="Apply diagonal map")
         self.play(*(Write(arrow) for _, arrow, _ in row_groups), Write(note))
         self.play(*(FadeIn(after) for _, _, after in row_groups))
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()

@@ -55,10 +55,13 @@ class AdaGradWeightedLedger(Slide):
         proof_region.scale_and_place(_themed_box(proof), buff=SMALL_BUFF)
 
         self.play(Write(title), FadeIn(weighted))
+        self.wait(0.4)
         self.next_slide(title="Change the ruler")
         self.play(Write(map_arrow), FadeIn(euclidean))
+        self.wait(0.4)
         self.next_slide(title="Read off the ledger")
         self.play(Write(proof))
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()
 

@@ -174,9 +174,11 @@ class MomentumDampingRegimes(Slide):
         critical_highlight.set_stroke(C_CRITICAL, width=PHASE_STROKE_WIDTH)
 
         self.play(Write(title), Write(equation), Write(beta_track))
+        self.wait(0.4)
         self.next_slide()
 
         self.play(Write(connectors[0]), FadeIn(under_panel, shift=DOWN * SMALL_BUFF))
+        self.wait(0.4)
         self.next_slide()
 
         self.play(
@@ -184,20 +186,25 @@ class MomentumDampingRegimes(Slide):
             FadeIn(critical_panel, shift=DOWN * SMALL_BUFF),
             Write(critical_rule),
         )
+        self.wait(0.4)
         self.next_slide()
 
         self.play(Write(connectors[2]), FadeIn(over_panel, shift=DOWN * SMALL_BUFF))
+        self.wait(0.4)
         self.next_slide()
 
         self.play(under_beta @ UNDERDAMPED_SWEEP_BETA, run_time=BETA_SWEEP_RUN_TIME)
         self.play(under_beta @ UNDERDAMPED_BETA, run_time=BETA_SWEEP_RUN_TIME)
+        self.wait(0.4)
         self.next_slide()
 
         self.play(over_beta @ OVERDAMPED_SWEEP_BETA, run_time=BETA_SWEEP_RUN_TIME)
         self.play(over_beta @ OVERDAMPED_BETA, run_time=BETA_SWEEP_RUN_TIME)
+        self.wait(0.4)
         self.next_slide()
 
         self.play(Create(critical_highlight), Indicate(connectors[1]))
+        self.wait(0.4)
         self.next_slide()
 
         self.play(
@@ -211,6 +218,7 @@ class MomentumDampingRegimes(Slide):
                 critical_highlight,
             )
         )
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()
 

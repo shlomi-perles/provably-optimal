@@ -126,7 +126,6 @@ class AdaGradLocalSqueeze(ThreeDSlide):
         self.region = self.region.fix_in_frame()
 
     def construct(self) -> None:
-        self.slide(title="AdaGrad's local diagonal squeeze")
         theme = get_active_theme()
         self.set_camera_orientation(phi=INITIAL_CAMERA_PHI, theta=INITIAL_CAMERA_THETA)
 
@@ -253,8 +252,10 @@ class AdaGradLocalSqueeze(ThreeDSlide):
                 fix_in_frame()
 
         self.play(Write(title), FadeIn(axes, axis_labels), Create(surface), FadeIn(hud_panel[0]), Write(bar))
+        self.wait(0.4)
         self.next_slide(title="Choose a point")
         self.play(FadeIn(current, current_label), Write(equation[0]))
+        self.wait(0.4)
         self.next_slide(title="Diagonal quadratic patch")
         self.play(Create(patch), Write(equation[1:]))
         self.move_camera(
@@ -262,5 +263,6 @@ class AdaGradLocalSqueeze(ThreeDSlide):
             theta=FINAL_CAMERA_THETA,
             run_time=CAMERA_MOVE_RUN_TIME,
         )
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()

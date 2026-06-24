@@ -210,9 +210,11 @@ class GradientDescentModes(Slide):
         dynamic_mobjects.suspend_updating()
 
         self.play(Write(title), Write(identity_equations))
+        self.wait(0.4)
         self.next_slide()
 
         self.play(TransformMatchingTex(hessian_formula, hessian_scalar))
+        self.wait(0.4)
         self.next_slide()
 
         self.play(
@@ -224,12 +226,14 @@ class GradientDescentModes(Slide):
             Unwrite(hessian_scalar),
             Write(derivation_equations[0]),
         )
+        self.wait(0.4)
         self.next_slide()
 
         self.play(
             Write(derivation_lines[0]),
             Write(derivation_equations[1]),
         )
+        self.wait(0.4)
         self.next_slide()
 
         self.play(
@@ -238,6 +242,7 @@ class GradientDescentModes(Slide):
             Write(mode_value_equation),
             Create(gd_mode_sum_frame),
         )
+        self.wait(0.4)
         self.next_slide()
 
         reminders.generate_target()
@@ -275,6 +280,7 @@ class GradientDescentModes(Slide):
         )
         dynamic_mobjects.resume_updating()
         dynamic_mobjects.update(0)
+        self.wait(0.4)
         self.next_slide(title="Overshoot the balanced step")
         self.play(
             eta @ eta_overshoot,
@@ -285,6 +291,7 @@ class GradientDescentModes(Slide):
                 eta_end=eta_overshoot,
             ),
         )
+        self.wait(0.4)
         self.next_slide(title="Balance the endpoints")
         self.play(
             eta @ eta_balanced,
@@ -295,6 +302,7 @@ class GradientDescentModes(Slide):
                 eta_end=eta_balanced,
             ),
         )
+        self.wait(0.4)
         self.next_slide(title="Return to the steep safe step")
         self.play(
             eta @ eta_safe,
@@ -305,6 +313,8 @@ class GradientDescentModes(Slide):
                 eta_end=eta_safe,
             ),
         )
+        self.wait()
+        self.next_slide()
         self.play(
             mode_factor_iteration @ MODE_FACTOR_DOT_FINAL_STEP,
             run_time=3.0,
@@ -313,6 +323,7 @@ class GradientDescentModes(Slide):
         dynamic_mobjects.suspend_updating()
         self.wait(2)
 
+        self.wait(0.4)
         self.next_slide()
 
         rate_summary_region = equations_region.copy()
@@ -360,8 +371,9 @@ class GradientDescentModes(Slide):
         )
         self.play(FadeOut(left_figure))
         self.play(Write(balance_condition))
+        self.wait(0.4)
         self.next_slide()
         self.play(Write(convergence_bound), Write(iteration_bound), Write(rho_star))
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()
-s

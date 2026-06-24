@@ -71,7 +71,6 @@ class MomentumQuadraticCloud(ThreeDSlide):
         self.region = self.region.fix_in_frame()
 
     def construct(self) -> None:
-        self.slide(title=SLIDE_TITLE)
         self.set_camera_orientation(phi=CAMERA_PHI, theta=CAMERA_THETA)
 
         title = Title(SLIDE_TITLE)
@@ -94,14 +93,17 @@ class MomentumQuadraticCloud(ThreeDSlide):
         self.add_fixed_orientation_mobjects(*axis_labels)
 
         self.play(Write(title), FadeIn(axes, axis_labels), FadeIn(seed_dot))
+        self.wait(0.4)
         self.next_slide()
 
         cloud = self._cloud(axes, samples[1:], heights[1:], cloud_colors[1:])
         self.play(seed_dot.animate.set_color(cloud_colors[0]), Create(cloud))
+        self.wait(0.4)
         self.next_slide()
 
         scene_mobjects = Group(world, cloud)
         self.play(FadeOut(title), FadeOut(scene_mobjects))
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()
 

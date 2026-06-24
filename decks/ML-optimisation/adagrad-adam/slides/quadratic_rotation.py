@@ -98,9 +98,12 @@ class QuadraticRotation(Slide):
         strip.scale_and_place(_themed_box(equations), buff=SMALL_BUFF)
 
         self.play(Write(title), FadeIn(original))
+        self.wait(0.4)
         self.next_slide(title="Rotate into modes")
         self.play(Write(map_group), FadeIn(eigenbasis))
+        self.wait(0.4)
         self.next_slide(title="Separated recurrence")
         self.play(Write(equations))
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()

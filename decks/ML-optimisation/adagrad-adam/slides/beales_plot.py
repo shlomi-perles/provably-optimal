@@ -378,7 +378,7 @@ class BealesPlot(ThreeDSlide):
         self.region = self.region.fix_in_frame()
 
     def construct(self) -> None:
-        self.slide(title=self.slide_title)
+        title = Title(self.slide_title)
         self.set_camera_orientation(phi=self.camera_initial_phi, theta=self.camera_initial_theta)
 
         data = self._make_plot_data()
@@ -404,13 +404,17 @@ class BealesPlot(ThreeDSlide):
             FadeIn(axes, axis_labels),
             Create(surface),
         )
+        self.wait(0.4)
         self.next_slide(title=self.sample_fragment_title)
         self.play(Create(path_lines), FadeIn(path_dots), Write(labels))
+        self.wait(0.4)
         self.next_slide(title=self.model_fragment_title)
         self.play(Create(patches))
         self._rotate_camera()
         self.wait(self.cue_boundary_wait_time)
+        self.wait(0.4)
         self.next_slide(title="Rotated view")
+        self.wait(0.4)
         self.next_slide()
         self.clear_scene()
 
