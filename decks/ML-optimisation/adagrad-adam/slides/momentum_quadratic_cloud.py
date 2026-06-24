@@ -103,7 +103,6 @@ class MomentumQuadraticCloud(ThreeDSlide):
         scene_mobjects = Group(world, cloud)
         self.play(FadeOut(title), FadeOut(scene_mobjects))
         self.clear_scene()
-        self.next_slide()
 
     def _make_axes(self) -> ThreeDAxes:
         return ThreeDAxes(

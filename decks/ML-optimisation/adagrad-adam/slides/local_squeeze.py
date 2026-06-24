@@ -262,3 +262,4 @@ class AdaGradLocalSqueeze(ThreeDSlide):
             theta=FINAL_CAMERA_THETA,
             run_time=CAMERA_MOVE_RUN_TIME,
         )
+        self.clear_scene()

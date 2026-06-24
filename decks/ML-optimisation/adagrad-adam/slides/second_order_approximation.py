@@ -1081,4 +1081,3 @@ class SecondOrderApproximation(Slide):
         self.next_slide()
 
         self.clear_scene()
-        self.next_slide()
