@@ -214,11 +214,11 @@ class AdaGrad(Slide):
             r"For $f(x)$, the gradient is "
             r"$\nabla f(x)_i = \lambda_i x_i$. Hence"
             r"\["
-            r"\frac{\nabla f(x)_i}{\sqrt{\sum_{t=1}^{T} \nabla f(x_t)_i^2}}"
+            r"\frac{\nabla f(x_t)_i}{\sqrt{\sum_{t=1}^{T} \nabla f(x_t)_i^2}}"
             r"="
-            r"\frac{\lambda_i x_i}{\sqrt{\sum_{t=1}^{T} \lambda_i^2 x_{t,i}^2}}"
+            r"\frac{\lambda_i x_{t,i}}{\sqrt{\sum_{t=1}^{T} \lambda_i^2 x_{t,i}^2}}"
             r"="
-            r"\frac{x_i}{\sqrt{\sum_{t=1}^{T} x_{t,i}^2}}"
+            r"\frac{x_{t,i}}{\sqrt{\sum_{t=1}^{T} x_{t,i}^2}}"
             r"\]",
             page_width=normalization_region,
         )
