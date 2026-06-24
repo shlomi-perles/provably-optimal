@@ -59,6 +59,7 @@ class AdaGradWeightedLedger(Slide):
         self.play(Write(map_arrow), FadeIn(euclidean))
         self.fragment(title="Read off the ledger")
         self.play(Write(proof))
+        self.next_slide()
         self.clear_scene()
 
     def _triangle_panel(

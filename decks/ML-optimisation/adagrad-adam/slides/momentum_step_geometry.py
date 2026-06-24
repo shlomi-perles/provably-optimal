@@ -123,6 +123,7 @@ class MomentumStepGeometry(Slide):
 
         self.play(MoveToTarget(heavy_ball), FadeIn(nesterov, shift=RIGHT * SMALL_BUFF))
         self.fragment(title="Heavy ball vs. Nesterov")
+        self.next_slide()
         self.clear_scene()
 
     def _heavy_ball_step(self, matrix: FloatArray) -> StepData:
