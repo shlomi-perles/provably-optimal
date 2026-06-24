@@ -97,7 +97,7 @@ class MomentumStepGeometry(Slide):
         )
 
         self.play(Write(title), Write(heavy_ball))
-        self.fragment(title="Nesterov look-ahead")
+        self.next_slide(title="Nesterov look-ahead")
 
         left_region, right_region = _split_weighted(body_region, [1, 1])
         heavy_ball.generate_target()
@@ -122,7 +122,7 @@ class MomentumStepGeometry(Slide):
         )
 
         self.play(MoveToTarget(heavy_ball), FadeIn(nesterov, shift=RIGHT * SMALL_BUFF))
-        self.fragment(title="Heavy ball vs. Nesterov")
+        self.next_slide(title="Heavy ball vs. Nesterov")
         self.next_slide()
         self.clear_scene()
 

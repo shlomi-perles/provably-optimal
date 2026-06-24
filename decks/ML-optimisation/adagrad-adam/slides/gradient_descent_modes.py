@@ -132,7 +132,7 @@ class GradientDescentModes(Slide):
         mode_position_equation = derivation_page.equations[-2]
         mode_value_equation = derivation_page.equations[-1]
         mode_equations = VGroup(mode_position_equation, mode_value_equation)
-        derivation_to_unwrite = VGroup(*derivation_lines, *derivation_equations)
+        derivation_to_unwrite = VGroup(*derivation_lines, *derivation_equations[:-2])
         gd_mode_sum_frame = SurroundingRectangle(
             mode_equations,
             color=C_YELLOW,
@@ -274,7 +274,7 @@ class GradientDescentModes(Slide):
         )
         dynamic_mobjects.resume_updating()
         dynamic_mobjects.update(0)
-        self.fragment(title="Overshoot the balanced step")
+        self.next_slide(title="Overshoot the balanced step")
         self.play(
             eta @ eta_overshoot,
             run_time=3.0,
@@ -284,7 +284,7 @@ class GradientDescentModes(Slide):
                 eta_end=eta_overshoot,
             ),
         )
-        self.fragment(title="Balance the endpoints")
+        self.next_slide(title="Balance the endpoints")
         self.play(
             eta @ eta_balanced,
             run_time=1.8,
@@ -294,7 +294,7 @@ class GradientDescentModes(Slide):
                 eta_end=eta_balanced,
             ),
         )
-        self.fragment(title="Return to the steep safe step")
+        self.next_slide(title="Return to the steep safe step")
         self.play(
             eta @ eta_safe,
             run_time=3.0,
@@ -315,7 +315,7 @@ class GradientDescentModes(Slide):
         self.next_slide()
 
         rate_summary_region = equations_region.copy()
-        rate_summary_region.update(top=compact_mode_sum)
+        rate_summary_region.update(top=compact_mode_sum, bottom=left_figure.bottom)
 
         balance_condition = theme_math(
             r"\begin{gathered}"
@@ -323,28 +323,33 @@ class GradientDescentModes(Slide):
             r"\eta^\star=\frac{2}{\alpha+\beta}"
             r"\end{gathered}",
         )
+        color_substrings(balance_condition, color_map, probe_class=MathTex)
+
         rho_star = theme_math(
             r"\rho_\star^{\mathrm{GD}}"
             r"=1-\frac{2}{\kappa+1}",
         )
+        color_substrings(rho_star, color_map, probe_class=MathTex)
+
         convergence_bound = theme_math(
             r"f(x_t)-f_\star\le"
             r"(\rho_\star^{\mathrm{GD}})^{2t}"
             r"\left(f(x_0)-f_\star\right)"
         )
+        color_substrings(convergence_bound, color_map, probe_class=MathTex)
+
         iteration_bound = theme_math(
             r"t=O\left(\kappa\log(1/\epsilon)\right)",
         )
+        color_substrings(iteration_bound, color_map, probe_class=MathTex)
         rate_summary = VGroup(
             balance_condition,
             rho_star,
             convergence_bound,
             iteration_bound,
         ).arrange(DOWN)
-        _color_text_parts(rate_summary, color_map)
         rate_summary_region.scale_and_place(
             rate_summary,
-            scale_kwargs={"max_scale": 1},
         )
         self.play(FadeOut(left_figure))
         self.play(Write(balance_condition), Write(rho_star))

@@ -78,19 +78,19 @@ class ReminderExample(Slide):
             FadeIn(horizontal_reminders),
             FadeIn(reminders),
         )
-        self.fragment(title="Pull equations into reminders")
+        self.next_slide(title="Pull equations into reminders")
         self.play(
             reminders.animate_add(problem[1], from_existing=True),
             horizontal_reminders.animate_add(problem[2], from_existing=True),
         )
-        self.fragment(title="Add curvature memory")
+        self.next_slide(title="Add curvature memory")
         self.play(reminders.animate_add(curvature), horizontal_reminders.animate_add(accumulated))
-        self.fragment(title="Add AdaGrad memory")
+        self.next_slide(title="Add AdaGrad memory")
         self.play(
             reminders.animate_add(diagonal),
             horizontal_reminders.animate_add(diagonal_chip),
         )
-        self.fragment(title="Remove stale gradient")
+        self.next_slide(title="Remove stale gradient")
         self.play(
             reminders.animate_remove(first),
             horizontal_reminders.animate_remove(rate),

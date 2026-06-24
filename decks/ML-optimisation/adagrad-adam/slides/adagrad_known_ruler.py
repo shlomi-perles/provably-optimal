@@ -90,7 +90,7 @@ class AdaGradKnownRuler(Slide):
         legend_region.scale_and_place(_themed_box(legend), buff=SMALL_BUFF)
 
         self.play(Write(title), *(FadeIn(panel[:5], start_group) for panel, _, start_group in panels))
-        self.fragment(title="Compare rulers")
+        self.next_slide(title="Compare rulers")
         self.play(*(Write(paths[0]) for _, paths, _ in panels), FadeIn(legend[0]))
         self.play(*(Write(paths[1]) for _, paths, _ in panels), FadeIn(legend[1]))
         self.play(*(Write(paths[2]) for _, paths, _ in panels), FadeIn(legend[2:]))
