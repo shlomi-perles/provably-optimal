@@ -67,6 +67,13 @@ class AdaGradWeightedLedger(Slide):
         points: dict[str, FloatArray],
         title: str,
         norm_suffix: str,
+        *,
+        show_caption: bool = True,
+        show_progress_marker: bool = True,
+        norm_label_color: str | None = None,
+        norm_label_scale: float = 1.0,
+        norm_label_color_map: dict[str, str] | None = None,
+        nudge_xt1_label: bool = False,
     ) -> Group:
         axes = _make_axes(
             (-2.8, 3.4, 1),
@@ -129,6 +136,7 @@ class AdaGradWeightedLedger(Slide):
             color: str,
             pos: float = 0.5,
             distance: float = LEDGER_LABEL_DISTANCE,
+            scale: float = 1.0,
             typography: str = "caption",
         ) -> MathTex:
             center = triangle_center()
@@ -139,6 +147,8 @@ class AdaGradWeightedLedger(Slide):
             label = theme_math(text, color=color, typography=typography)
             label.move_to(axes.c2p(float(location[0]), float(location[1])))
             label.rotate(readable_angle(pa, pb))
+            if scale != 1.0:
+                label.scale(scale)
             return label
 
         def point_label(key: str, typography: str) -> MathTex:
@@ -150,6 +160,15 @@ class AdaGradWeightedLedger(Slide):
                 np.array([0.0, -1.0], dtype=np.float64) if norm == 0 else direction / norm
             )
             location = point + LEDGER_POINT_LABEL_DISTANCE * direction
+            if key == "xt1" and nudge_xt1_label:
+                step_direction = p_xt1 - p_xt
+                arrow_normal = np.array([-step_direction[1], step_direction[0]], dtype=np.float64)
+                normal_norm = np.linalg.norm(arrow_normal)
+                if normal_norm > 0:
+                    arrow_normal = arrow_normal / normal_norm
+                    if np.dot(arrow_normal, np.array([1.0, 1.0], dtype=np.float64)) < 0:
+                        arrow_normal = -arrow_normal
+                    location = location + LEDGER_POINT_LABEL_DISTANCE * arrow_normal
             return theme_math(labels[key], color=C_TEXT, typography=typography).move_to(
                 axes.c2p(float(location[0]), float(location[1]))
             )
@@ -177,31 +196,38 @@ class AdaGradWeightedLedger(Slide):
             point_label("xt", label_typography),
             point_label("xt1", label_typography),
         )
+        distance_label_color = norm_label_color if norm_label_color is not None else C_MUTED
+        movement_label_color = norm_label_color if norm_label_color is not None else C_RED
         side_labels = VGroup(
             line_label(
                 p_xt,
                 p_star,
                 rf"\|x_t-x^\star\|_{{{norm_suffix}}}^2",
                 side="inner",
-                color=C_MUTED,
+                color=distance_label_color,
+                scale=norm_label_scale,
             ),
             line_label(
                 p_xt1,
                 p_star,
                 rf"\|x_{{t+1}}-x^\star\|_{{{norm_suffix}}}^2",
                 side="inner",
-                color=C_MUTED,
+                color=distance_label_color,
                 pos=LEDGER_NEW_DISTANCE_LABEL_POSITION,
+                scale=norm_label_scale,
             ),
             line_label(
                 p_xt,
                 p_xt1,
                 rf"\|x_{{t+1}}-x_t\|_{{{norm_suffix}}}^2",
                 side="inner",
-                color=C_RED,
+                color=movement_label_color,
                 pos=LEDGER_STEP_LABEL_POSITION,
+                scale=norm_label_scale,
             ),
         )
+        if norm_label_color_map is not None:
+            color_substrings(side_labels, norm_label_color_map, probe_class=MathTex)
         extras = VGroup()
         if norm_suffix == "D_t":
             extras.add(
@@ -231,27 +257,28 @@ class AdaGradWeightedLedger(Slide):
                     distance=LEDGER_LABEL_OUTER_DISTANCE,
                 ),
             )
-            center = triangle_center()
-            outer = -side_normal(p_xt, p_star, center)
-            brace_start = p_xt + LEDGER_P_PROJECTION_START * (p_star - p_xt)
-            brace_end = p_xt + LEDGER_P_PROJECTION_END * (p_star - p_xt)
-            brace = BraceBetweenPoints(
-                axes.c2p(float(brace_start[0]), float(brace_start[1])),
-                axes.c2p(float(brace_end[0]), float(brace_end[1])),
-                direction=np.array([outer[0], outer[1], 0.0]),
-                color=C_PURPLE,
-            )
-            p_point = p_xt + LEDGER_P_POINT_POSITION * (p_star - p_xt)
-            open_point = Circle(radius=vertex_radius, color=C_PURPLE).move_to(
-                axes.c2p(float(p_point[0]), float(p_point[1]))
-            )
-            open_point.set_fill(C_PANEL_DEEP, opacity=1.0)
-            p_label = theme_math(r"P", color=C_PURPLE, typography="caption").next_to(
-                brace,
-                LEFT,
-                buff=SMALL_BUFF,
-            )
-            extras.add(brace, p_label, open_point)
+            if show_progress_marker:
+                center = triangle_center()
+                outer = -side_normal(p_xt, p_star, center)
+                brace_start = p_xt + LEDGER_P_PROJECTION_START * (p_star - p_xt)
+                brace_end = p_xt + LEDGER_P_PROJECTION_END * (p_star - p_xt)
+                brace = BraceBetweenPoints(
+                    axes.c2p(float(brace_start[0]), float(brace_start[1])),
+                    axes.c2p(float(brace_end[0]), float(brace_end[1])),
+                    direction=np.array([outer[0], outer[1], 0.0]),
+                    color=C_PURPLE,
+                )
+                p_point = p_xt + LEDGER_P_POINT_POSITION * (p_star - p_xt)
+                open_point = Circle(radius=vertex_radius, color=C_PURPLE).move_to(
+                    axes.c2p(float(p_point[0]), float(p_point[1]))
+                )
+                open_point.set_fill(C_PANEL_DEEP, opacity=1.0)
+                p_label = theme_math(r"P", color=C_PURPLE, typography="caption").next_to(
+                    brace,
+                    LEFT,
+                    buff=SMALL_BUFF,
+                )
+                extras.add(brace, p_label, open_point)
         else:
             extras.add(
                 line_label(
@@ -264,7 +291,6 @@ class AdaGradWeightedLedger(Slide):
                     distance=LEDGER_EUCLIDEAN_STEP_LABEL_DISTANCE,
                 )
             )
-        caption = Caption(title).next_to(axes, UP)
         frame.set_stroke(
             C_FRAME,
             width=LEDGER_FRAME_STROKE_WIDTH,
@@ -272,4 +298,7 @@ class AdaGradWeightedLedger(Slide):
         )
         field = Group(heatmap, grid, levels)
         distances = VGroup(old_distance, new_distance, step, dots, point_labels, side_labels, extras)
+        if not show_caption:
+            return Group(frame, axes, field, distances)
+        caption = Caption(title).next_to(axes, UP)
         return Group(frame, axes, field, distances, caption)

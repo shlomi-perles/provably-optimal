@@ -5,6 +5,7 @@ from __future__ import annotations
 from manim import (
     DL,
     DR,
+    LARGE_BUFF,
     MoveToTarget,
     ReplacementTransform,
     SurroundingRectangle,
@@ -317,43 +318,50 @@ class GradientDescentModes(Slide):
         rate_summary_region = equations_region.copy()
         rate_summary_region.update(top=compact_mode_sum, bottom=left_figure.get_bottom())
 
-        balance_condition = theme_math(
+        balance_condition = MathTex(
             r"\begin{gathered}"
             r"|1-\eta\alpha|=|1-\eta\beta|\\"
             r"\eta^\star=\frac{2}{\alpha+\beta}"
             r"\end{gathered}",
         )
-        color_substrings(balance_condition, color_map, probe_class=MathTex)
+        balance_condition = remove_invisible_chars(balance_condition)
+        color_substrings(balance_condition, color_map)
 
-        rho_star = theme_math(
-            r"\rho_\star^{\mathrm{GD}}"
+        rho_star = MathTex(
+            r"* \rho_\star^{\mathrm{GD}}"
             r"=1-\frac{2}{\kappa+1}",
         )
-        color_substrings(rho_star, color_map, probe_class=MathTex)
+        rho_star = remove_invisible_chars(rho_star)
+        color_substrings(rho_star, color_map)
 
-        convergence_bound = theme_math(
+        convergence_bound = MathTex(
             r"f(x_t)-f_\star\le"
             r"(\rho_\star^{\mathrm{GD}})^{2t}"
             r"\left(f(x_0)-f_\star\right)"
         )
-        color_substrings(convergence_bound, color_map, probe_class=MathTex)
+        convergence_bound = remove_invisible_chars(convergence_bound)
+        color_substrings(convergence_bound, color_map)
 
-        iteration_bound = theme_math(
+        iteration_bound = MathTex(
             r"t=O\left(\kappa\log(1/\epsilon)\right)",
         )
-        color_substrings(iteration_bound, color_map, probe_class=MathTex)
+        iteration_bound = remove_invisible_chars(iteration_bound)
+        color_substrings(iteration_bound, color_map)
         rate_summary = VGroup(
             balance_condition,
-            rho_star,
             convergence_bound,
             iteration_bound,
-        ).arrange(DOWN)
+            rho_star,
+        ).arrange(DOWN, buff=MED_LARGE_BUFF)
+        rho_star.scale(0.6)
+        rate_summary_region.place(rho_star, DL, buff=0)
         rate_summary_region.scale_and_place(
-            rate_summary,
+            rate_summary[:-1],
         )
         self.play(FadeOut(left_figure))
-        self.play(Write(balance_condition), Write(rho_star))
+        self.play(Write(balance_condition))
         self.next_slide()
-        self.play(Write(convergence_bound), Write(iteration_bound))
+        self.play(Write(convergence_bound), Write(iteration_bound), Write(rho_star))
         self.next_slide()
         self.clear_scene()
+s
