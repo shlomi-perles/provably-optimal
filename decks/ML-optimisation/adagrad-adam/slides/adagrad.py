@@ -34,6 +34,7 @@ class AdaGrad(Slide):
         color_map = {
             r"\lambda": C_ORANGE,
             r"\lambda_i": C_ORANGE,
+            r"\lambda_i^2": C_ORANGE,
             r"\alpha_i": C_GREEN,
             r"\alpha": C_BLUE,
             r"\beta": C_ORANGE,
@@ -49,6 +50,7 @@ class AdaGrad(Slide):
             r"x_i": C_YELLOW,
             r"x_j": C_YELLOW,
             r"x_{t,i}": C_YELLOW,
+            r"x_t^2": FORMULA_COLORS[r"x_t"],
         }
 
         quadratic_model = theme_math(

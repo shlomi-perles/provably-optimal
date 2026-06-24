@@ -315,7 +315,7 @@ class GradientDescentModes(Slide):
         self.next_slide()
 
         rate_summary_region = equations_region.copy()
-        rate_summary_region.update(top=compact_mode_sum, bottom=left_figure.bottom)
+        rate_summary_region.update(top=compact_mode_sum, bottom=left_figure.get_bottom())
 
         balance_condition = theme_math(
             r"\begin{gathered}"
