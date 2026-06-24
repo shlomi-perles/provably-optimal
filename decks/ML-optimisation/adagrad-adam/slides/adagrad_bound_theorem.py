@@ -168,7 +168,7 @@ class AdaGradBoundTheorem(Slide):
             r"\alpha_i^\star = \frac{R_i}{\sqrt{\sum_{t=1}^{T} g_{t,i}^2}}."
             r"\]"
             r"\end{thm}",
-            page_width=region,
+            # page_width=region,
             tex_template=tex_template,
             font_size=get_active_theme().typography.caption,
         )
@@ -205,7 +205,13 @@ class AdaGradBoundTheorem(Slide):
 
     def _proof_header(self, region, tex_template: TexTemplate) -> tuple[TexPage, VGroup]:
         proof_region, definitions_region, _ = _split_rows(region, [0.95, 0.8, 2.75])
-        proof_page =  MathTex(r"$f(x_t)-f(x^\star)\le \ip{\nabla f(x_t)}{x_t-x^\star}$ \quad \rightarrow \quad \eta\sum_{t=1}^{T}\bigl(f(x_t)-f(x^\star)\bigr)")
+        proof_page = _bound_math(
+            r"f(x_t)-f(x^\star)\le \ip{\nabla f(x_t)}{x_t-x^\star}",
+            r"\quad \rightarrow \quad",
+            r"\eta\sum_{t=1}^{T}\bigl(f(x_t)-f(x^\star)\bigr)",
+            r"\le P+M",
+            tex_template=tex_template,
+        )
         _color_adagrad_math(proof_page)
         proof_region.scale_and_place(proof_page, buff=SMALL_BUFF)
 
