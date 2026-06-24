@@ -88,11 +88,11 @@ class MomentumQuadraticCloud(ThreeDSlide):
         dot_radius = self._dot_radius(axes)
         cloud_colors = color_gradient((C_BLUE, C_TEAL, C_GREEN, C_ORANGE), len(samples))
         seed_dot = self._dot(axes, samples[0], heights[0], color=C_YELLOW, radius=dot_radius)
-        world = Group(axes, axis_labels, seed_dot)
+        world = Group(axes, seed_dot)
         self.region.scale_and_place(world)
-        self.add_fixed_orientation_mobjects(*axis_labels)
+        # self.add_fixed_orientation_mobjects(*axis_labels)
 
-        self.play(Write(title), FadeIn(axes, axis_labels), FadeIn(seed_dot))
+        self.play(Write(title), FadeIn(axes), FadeIn(seed_dot))
         self.wait(0.4)
         self.next_slide()
 

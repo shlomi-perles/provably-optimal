@@ -335,29 +335,29 @@ class GradientDescentModes(Slide):
             r"\eta^\star=\frac{2}{\alpha+\beta}"
             r"\end{gathered}",
         )
-        balance_condition = remove_invisible_chars(balance_condition)
         color_substrings(balance_condition, color_map)
+        balance_condition = remove_invisible_chars(balance_condition)
 
         rho_star = MathTex(
             r"* \rho_\star^{\mathrm{GD}}"
             r"=1-\frac{2}{\kappa+1}",
         )
-        rho_star = remove_invisible_chars(rho_star)
         color_substrings(rho_star, color_map)
+        rho_star = remove_invisible_chars(rho_star)
 
         convergence_bound = MathTex(
             r"f(x_t)-f_\star\le"
             r"(\rho_\star^{\mathrm{GD}})^{2t}"
             r"\left(f(x_0)-f_\star\right)"
         )
-        convergence_bound = remove_invisible_chars(convergence_bound)
         color_substrings(convergence_bound, color_map)
+        convergence_bound = remove_invisible_chars(convergence_bound)
 
         iteration_bound = MathTex(
             r"t=O\left(\kappa\log(1/\epsilon)\right)",
         )
-        iteration_bound = remove_invisible_chars(iteration_bound)
         color_substrings(iteration_bound, color_map)
+        iteration_bound = remove_invisible_chars(iteration_bound)
         rate_summary = VGroup(
             balance_condition,
             convergence_bound,

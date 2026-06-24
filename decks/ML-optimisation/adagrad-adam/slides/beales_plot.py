@@ -122,10 +122,10 @@ CAMERA_FINAL_THETA = (
     + CAMERA_AZIMUTH_FLIP
     + CAMERA_Z_AXIS_ROTATION
 )
-ADAGRAD_CAMERA_INITIAL_PHI = (54 + 30) * DEGREES
-ADAGRAD_CAMERA_INITIAL_THETA = (-46 + 30) * DEGREES
-ADAGRAD_CAMERA_FINAL_PHI = 62 + 30 * DEGREES
-ADAGRAD_CAMERA_FINAL_THETA = (-38 + 30) * DEGREES
+ADAGRAD_CAMERA_INITIAL_PHI = CAMERA_INITIAL_PHI
+ADAGRAD_CAMERA_INITIAL_THETA = CAMERA_INITIAL_THETA
+ADAGRAD_CAMERA_FINAL_PHI = CAMERA_FINAL_PHI
+ADAGRAD_CAMERA_FINAL_THETA = CAMERA_FINAL_THETA
 CAMERA_MOVE_RUN_TIME = 2.0
 
 PATH_DOT_RADIUS_TO_Z_AXIS = 1 / (4 * 34)
@@ -378,7 +378,6 @@ class BealesPlot(ThreeDSlide):
         self.region = self.region.fix_in_frame()
 
     def construct(self) -> None:
-        title = Title(self.slide_title)
         self.set_camera_orientation(phi=self.camera_initial_phi, theta=self.camera_initial_theta)
 
         data = self._make_plot_data()
@@ -400,12 +399,11 @@ class BealesPlot(ThreeDSlide):
             label.fix_orientation()
 
         self.play(
-            Write(title),
+            FadeIn(title),
             FadeIn(axes, axis_labels),
             Create(surface),
         )
         self.wait(0.4)
-        self.next_slide(title=self.sample_fragment_title)
         self.play(Create(path_lines), FadeIn(path_dots), Write(labels))
         self.wait(0.4)
         self.next_slide(title=self.model_fragment_title)

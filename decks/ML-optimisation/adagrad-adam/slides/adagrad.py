@@ -295,7 +295,7 @@ class AdaGrad(Slide):
                 VGroup(
                     Dot(color=C_GREEN),
                     theme_math(
-                        r"x_{t+1}=x_t-\eta\nabla f(x_t),\ \eta=\frac{1}{\alpha+\beta}",
+                        r"x_{t+1}=x_t-\eta\nabla f(x_t)",
                         color=C_TEXT,
                         typography="caption",
                     ),

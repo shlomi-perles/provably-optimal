@@ -11,7 +11,6 @@ entrypoints = [
     "slides.beales_plot:BealesPlot@opengl",
     "slides.rosenbrock_momentum:MomentumRosenbrock",
     "slides.momentum_damping:MomentumDampingRegimes",
-    "slides.adagrad_coordinate_response:AdaGradCoordinateResponse",
     "slides.momentum_quadratic_cloud:MomentumQuadraticCloud@opengl",
     "slides.momentum_step_geometry:MomentumStepGeometry",
 ]
