@@ -78,7 +78,6 @@ class MomentumQuadraticCloud(ThreeDSlide):
         title.fix_in_frame()
 
         axes = self._make_axes()
-        axis_labels = self._make_axis_labels(axes)
         samples = self._sample_points()
         heights = self._quadratic_heights(samples)
         order = np.argsort(heights)
@@ -90,7 +89,6 @@ class MomentumQuadraticCloud(ThreeDSlide):
         seed_dot = self._dot(axes, samples[0], heights[0], color=C_YELLOW, radius=dot_radius)
         world = Group(axes, seed_dot)
         self.region.scale_and_place(world)
-        # self.add_fixed_orientation_mobjects(*axis_labels)
 
         self.play(Write(title), FadeIn(axes), FadeIn(seed_dot))
         self.wait(2)

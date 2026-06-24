@@ -201,7 +201,6 @@ class GradientDescentModes(Slide):
         )
         mode_factor_region.scale_and_place(mode_factor_axis, buff=0)
         mode_factor_axis.update()
-        rate_axis_title = mode_factor_axis[0]
         rate_axis_axes = mode_factor_axis[2][0]
         mode_factor_axis.shift(RIGHT * (title.get_right()[0] - rate_axis_axes.x_axis.get_right()[0]))
         mode_factor_axis.update()
