@@ -123,6 +123,7 @@ class MomentumStepGeometry(Slide):
 
         self.play(MoveToTarget(heavy_ball), FadeIn(nesterov, shift=RIGHT * SMALL_BUFF))
         self.fragment(title="Heavy ball vs. Nesterov")
+        self.clear_scene()
 
     def _heavy_ball_step(self, matrix: FloatArray) -> StepData:
         gradient_correction = -SOURCE_ETA * (matrix @ SOURCE_X_T)

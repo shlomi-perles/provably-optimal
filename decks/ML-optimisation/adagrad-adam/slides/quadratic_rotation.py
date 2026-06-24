@@ -102,3 +102,4 @@ class QuadraticRotation(Slide):
         self.play(Write(map_group), FadeIn(eigenbasis))
         self.fragment(title="Separated recurrence")
         self.play(Write(equations))
+        self.clear_scene()

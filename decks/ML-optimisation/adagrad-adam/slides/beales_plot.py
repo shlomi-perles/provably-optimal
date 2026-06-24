@@ -122,10 +122,10 @@ CAMERA_FINAL_THETA = (
     + CAMERA_AZIMUTH_FLIP
     + CAMERA_Z_AXIS_ROTATION
 )
-ADAGRAD_CAMERA_INITIAL_PHI = 54 * DEGREES
-ADAGRAD_CAMERA_INITIAL_THETA = -46 * DEGREES
-ADAGRAD_CAMERA_FINAL_PHI = 62 * DEGREES
-ADAGRAD_CAMERA_FINAL_THETA = -38 * DEGREES
+ADAGRAD_CAMERA_INITIAL_PHI = (54 + 30) * DEGREES
+ADAGRAD_CAMERA_INITIAL_THETA = (-46 + 30) * DEGREES
+ADAGRAD_CAMERA_FINAL_PHI = 62 + 30 * DEGREES
+ADAGRAD_CAMERA_FINAL_THETA = (-38 + 30) * DEGREES
 CAMERA_MOVE_RUN_TIME = 2.0
 
 PATH_DOT_RADIUS_TO_Z_AXIS = 1 / (4 * 34)
@@ -411,6 +411,7 @@ class BealesPlot(ThreeDSlide):
         self._rotate_camera()
         self.wait(self.cue_boundary_wait_time)
         self.fragment(title="Rotated view")
+        self.clear_scene()
 
     def _trajectory_points(self) -> FloatArray:
         return _simulate_beale_steps()

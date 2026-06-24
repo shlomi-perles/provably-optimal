@@ -24,3 +24,4 @@ class KeyIdea(SimplexScene):
         self.region.place(group, ORIGIN)
 
         self.play(Write(title_mob), FadeIn(body_mob, shift=DOWN * MED_SMALL_BUFF))
+        self.clear_scene()

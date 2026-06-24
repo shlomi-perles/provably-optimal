@@ -20,3 +20,4 @@ class Intro(SimplexScene):
         sub = Tex(escape_tex_text(self.subtitle), font_size=theme.typography.h2)
         sub.next_to(title_mob, DOWN, buff=MED_LARGE_BUFF)
         self.play(Write(title_mob), Write(sub))
+        self.clear_scene()

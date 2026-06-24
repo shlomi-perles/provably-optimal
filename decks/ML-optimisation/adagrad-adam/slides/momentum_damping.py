@@ -212,7 +212,6 @@ class MomentumDampingRegimes(Slide):
             )
         )
         self.clear_scene()
-        self.next_slide()
 
     def _make_equation(self, region: Region) -> VGroup:
         update = theme_math(

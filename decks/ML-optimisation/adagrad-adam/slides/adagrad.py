@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from manim import TransformMatchingTex
+from manim import TransformMatchingTex, Unwrite
 
 from slides.helpers.figure_helpers import *
 from slides.helpers.reminders import ReminderStack
@@ -14,20 +14,24 @@ class AdaGrad(Slide):
 
     def construct(self) -> None:
         title = _start_slide(self, "Diagonal Approximation: AdaGrad")
-        full_region = self.region.copy()
+        screen_region = self.region.copy()
         intro_region = self.region.copy()
         intro_region.update(left=title.get_left(), right=title.get_right())
-
-        reminder_region, body_region = _split_rows(full_region, [1, 4])
-        subtitle_region, figure_region = _split_rows(body_region, [1, 5])
+        main_region = self.region.copy()
 
         color_map = {
             r"\lambda": C_ORANGE,
             r"\lambda_i": C_ORANGE,
+            r"\alpha_i": C_GREEN,
+            r"\alpha": C_BLUE,
+            r"\beta": C_ORANGE,
             r"\Lambda": C_ORANGE,
             r"D_t": C_TEAL,
             r"D_A": C_PURPLE,
             r"V": C_BLUE,
+            r"\eta": C_YELLOW,
+            r"g_t": C_GREEN,
+            r"s_{t,i}": C_TEAL,
             r"x_t": FORMULA_COLORS[r"x_t"],
             r"x_{t+1}": FORMULA_COLORS[r"x_{t+1}"],
         }
@@ -57,28 +61,26 @@ class AdaGrad(Slide):
             identity_equations,
             scale_kwargs={"scaleback": 1 / 2},
         )
+        hessian_diagonal.scale(hessian_formula[0].height / hessian_diagonal[0].height)
         hessian_diagonal.move_to(hessian_formula)
 
         adagrad_update = theme_math(
-            r"x_{t+1}=x_t-D_t\nabla f(x_t)",
+            r"x_{t+1}=x_t-\eta D_t^{-1}\nabla f(x_t)",
             typography="caption",
         )
         _color_text_parts(adagrad_update, color_map)
         reminders = ReminderStack(
             [adagrad_update],
-            width=reminder_region.width,
-            max_height=reminder_region.height,
-            corner=UR,
             orientation="horizontal",
         )
-        reminder_region.place(reminders, UR, buff=SMALL_BUFF)
-        body_region.update(top=reminders)
+        screen_region.place(reminders, DL, buff=SMALL_BUFF)
+        main_region.update(bottom=reminders)
+        subtitle_region, figure_region = _split_rows(main_region, [1, 5])
 
         first_guess = theme_math(
-            r"\text{First guess: }\nabla^2 f(x_t)\approx \Lambda"
+            r"\text{Since }f(x_t)-f_\star= \frac12\sum_{i=1}^n \lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}\text{, first guess: } \nabla^2 f(x_t)\approx \Lambda"
         )
         _color_text_parts(first_guess, color_map)
-        subtitle_region.update(top=body_region.get_top())
         subtitle_region.scale_and_place(
             first_guess,
             UL,
@@ -87,8 +89,12 @@ class AdaGrad(Slide):
         )
         figure_region.update(top=first_guess)
 
-        known_ruler, known_paths = self._known_ruler_figures(figure_region, color_map)
-        diagonal_scaling = self._diagonal_scaling_figures(figure_region, color_map)
+        known_ruler, known_paths, method_keys = self._known_ruler_figures(
+            figure_region,
+            color_map,
+        )
+        known_method_labels = VGroup(*(row for key in method_keys for row in key[:2]))
+        adagrad_method_labels = VGroup(*(key[2] for key in method_keys))
 
         self.play(Write(title), Write(identity_equations))
         self.next_slide()
@@ -113,29 +119,85 @@ class AdaGrad(Slide):
         self.play(Write(first_guess))
         self.play(
             FadeIn(known_ruler),
-            *(Write(paths) for paths in known_paths),
+            *(Write(paths[0]) for paths in known_paths),
+            *(Write(paths[1]) for paths in known_paths),
+            FadeIn(known_method_labels),
         )
         self.next_slide()
 
-        self.play(FadeOut(known_ruler, *known_paths))
+        self.play(
+            *(Write(paths[2]) for paths in known_paths),
+            FadeIn(adagrad_method_labels),
+        )
+        self.next_slide()
+
+        diagonal_region = main_region.copy()
+        diagonal_region.update(top=title)
+        diagonal_scaling = self._diagonal_scaling_figures(diagonal_region)
+        self.play(
+            Unwrite(first_guess),
+            FadeOut(
+                known_ruler,
+                *known_paths,
+                known_method_labels,
+                adagrad_method_labels,
+            ),
+        )
         self.play(FadeIn(diagonal_scaling[0]))
         self.play(
             *(Write(arrow) for arrow in diagonal_scaling[1]),
             FadeIn(diagonal_scaling[2]),
         )
-        self.play(Write(diagonal_scaling[3]))
         self.next_slide()
 
-        self.clear_scene()
+        second_guess_region = main_region.copy()
+        second_guess_region.update(top=title)
+        second_guess_title_region, second_guess_page_region = _split_rows(
+            second_guess_region,
+            [1, 5],
+        )
+        second_guess = theme_math(
+            r"\text{Second Guess: Gradient Sums}",
+            color=C_YELLOW,
+            typography="h2",
+        )
+        second_guess_title_region.place(second_guess)
+        second_guess_page_region.update(top=second_guess)
+        gradients_page = TexPage(
+            r"\["
+            r"x_{t+1,i}=x_{t,i}-"
+            r"\frac{\nabla f(x_t)_i}"
+            r"{\sqrt{\sum_{j=0}^t \nabla f(x_j)_i^2}}"
+            r"\]"
+            r"Equivalently, with"
+            r"\["
+            r"D_t=\operatorname{diag}(s_{t,1},\ldots,s_{t,n}),"
+            r"\qquad "
+            r"s_{t,i}=\sqrt{\sum_{j=0}^t \nabla f(x_j)_i^2},"
+            r"\]"
+            r"the vector update is"
+            r"\["
+            r"\boxed{x_{t+1}=x_t-\eta D_t^{-1}g_t.}"
+            r"\]",
+            page_width=second_guess_page_region,
+        )
+        color_substrings(gradients_page, color_map, probe_class=MathTex)
+        second_guess_page_region.scale_and_place(
+            gradients_page,
+            scale_kwargs={"max_scale": 1},
+        )
+        self.play(FadeOut(*diagonal_scaling))
+        self.play(Write(second_guess))
+        self.play(Write(gradients_page))
         self.next_slide()
+        self.clear_scene()
 
     def _known_ruler_figures(
         self,
         region,
         color_map: dict[str, str],
-    ) -> tuple[Group, tuple[VGroup, ...]]:
-        body, legend_region = _split_rows(region, [4, 1])
-        left, right = _split_weighted(body, [1, 1])
+    ) -> tuple[Group, tuple[VGroup, ...], tuple[VGroup, ...]]:
+        left, right = _split_weighted(region, [1, 1])
         rotated_matrix, _ = _rotated_quadratic_matrix()
         eigenvalues, _ = _quadratic_eigendecomposition(rotated_matrix)
         axis_matrix = np.diag(eigenvalues)
@@ -144,6 +206,7 @@ class AdaGrad(Slide):
 
         panel_groups: list[Group] = []
         path_groups: list[VGroup] = []
+        method_keys: list[VGroup] = []
         for panel_region, matrix, radial in (
             (left, rotated_matrix, False),
             (right, axis_matrix, True),
@@ -177,33 +240,47 @@ class AdaGrad(Slide):
                 radius=frame.height * PANEL_MARKER_FRAME_HEIGHT_RATIO,
             )
             start_label = label_for_dot(r"x_0", start, color=C_GREEN, direction=UR)
+            method_key = VGroup(
+                VGroup(
+                    Dot(color=C_GREEN),
+                    theme_math(
+                        r"x_{t+1}=x_t-\eta\nabla f(x_t),\ \eta=\frac{1}{\alpha+\beta}",
+                        color=C_TEXT,
+                        typography="caption",
+                    ),
+                ).arrange(RIGHT, buff=SMALL_BUFF),
+                VGroup(
+                    Dot(color=C_PURPLE),
+                    theme_math(
+                        r"x_{t+1}=x_t-\Lambda^{-1}\nabla f(x_t)",
+                        color=C_TEXT,
+                        typography="caption",
+                    ),
+                ).arrange(RIGHT, buff=SMALL_BUFF),
+                VGroup(
+                    Dot(color=C_TEAL),
+                    theme_math(
+                        r"x_{t+1}=x_t-D_t^{-1}\nabla f(x_t)",
+                        color=C_TEXT,
+                        typography="caption",
+                    ),
+                ).arrange(RIGHT, buff=SMALL_BUFF),
+            ).arrange(DOWN, aligned_edge=LEFT, buff=SMALL_BUFF)
+            method_key.move_to(axes.c2p(-2.10, 8.35), aligned_edge=UL)
             panel_base = Group(*panel[:4], start, start_label)
-            panel_region.scale_and_place(Group(panel_base, paths), buff=SMALL_BUFF)
+            panel_region.scale_and_place(Group(panel_base, paths, method_key), buff=SMALL_BUFF)
             panel_groups.append(panel_base)
             path_groups.append(paths)
+            method_keys.append(method_key)
 
-        legend = VGroup(
-            VGroup(Dot(color=C_GREEN), Caption(r"scalar GD")).arrange(RIGHT),
-            VGroup(Dot(color=C_PURPLE), Caption(r"known diagonal inverse")).arrange(RIGHT),
-            VGroup(Dot(color=C_TEAL), Caption(r"AdaGrad coordinate ruler")).arrange(RIGHT),
-            theme_math(r"x_{t+1}=x_t-D_t\nabla f(x_t)", typography="caption"),
-        ).arrange(RIGHT, buff=MED_LARGE_BUFF)
-        _color_text_parts(legend, color_map)
-        legend_shell = _themed_box(legend)
-        legend_region.scale_and_place(
-            legend_shell,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
-        return Group(*panel_groups, legend_shell), tuple(path_groups)
+        color_substrings(VGroup(*method_keys), color_map, probe_class=MathTex)
+        return Group(*panel_groups), tuple(path_groups), tuple(method_keys)
 
     def _diagonal_scaling_figures(
         self,
         region,
-        color_map: dict[str, str],
-    ) -> tuple[VGroup, VGroup, VGroup, MathTex]:
-        body, note_region = _split_rows(region, [5, 1])
-        rows = _split_rows(body, [1, 1])
+    ) -> tuple[Group, Group, Group]:
+        rows = _split_rows(region, [1, 1])
         rotated_matrix, _ = _rotated_quadratic_matrix()
         axis_matrix = _quadratic_axis_matrix(rotated_matrix)
 
@@ -216,7 +293,7 @@ class AdaGrad(Slide):
         ):
             before_region, arrow_region, after_region = _split_weighted(
                 row_region,
-                [1, 0.3, 1],
+                [1, 0.42, 1],
             )
             diagonal = np.diag(np.diag(matrix))
             inverse_sqrt = np.linalg.inv(np.sqrt(diagonal))
@@ -239,14 +316,14 @@ class AdaGrad(Slide):
             after_region.scale_and_place(after, buff=SMALL_BUFF)
 
             map_label = VGroup(
-                theme_math(r"x\mapsto", color=C_PURPLE, typography="caption"),
-                theme_math(r"D_A^{-1/2}x", color=C_PURPLE, typography="caption"),
+                theme_math(r"x\mapsto", color=C_YELLOW, typography="caption"),
+                theme_math(r"D_A^{-1/2}x", color=C_YELLOW, typography="caption"),
             ).arrange(DOWN, buff=SMALL_BUFF)
             map_arrow = CurvedArrow(
                 LEFT,
                 RIGHT,
                 angle=-PI / 2,
-                color=C_PURPLE,
+                color=C_YELLOW,
                 tip_shape=StealthTip,
             )
             arrow = VGroup(map_label, map_arrow).arrange(DOWN)
@@ -256,15 +333,4 @@ class AdaGrad(Slide):
             arrows.add(arrow)
             after_panels.add(after)
 
-        note = theme_math(
-            r"D_A=\operatorname{diag}(A_{11},A_{22})",
-            r"\qquad",
-            r"D_A^{-1/2}AD_A^{-1/2}",
-        )
-        _color_text_parts(note, color_map)
-        note_region.scale_and_place(
-            note,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
-        )
-        return before_panels, arrows, after_panels, note
+        return before_panels, arrows, after_panels

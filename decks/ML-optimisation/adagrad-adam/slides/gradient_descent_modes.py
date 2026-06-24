@@ -27,6 +27,7 @@ class GradientDescentModes(Slide):
 
     def construct(self) -> None:
         title = _start_slide(self, "Scalar Approximation: Gradient Descent")
+        screen_region = self.region.copy()
         self.region.update(left=title.get_left(), right=title.get_right())
         top, bottom = _split_rows(self.region, [1, 2])
         equations_region, mode_factor_region = _split_weighted(top, [2, 3])
@@ -84,7 +85,7 @@ class GradientDescentModes(Slide):
             orientation="horizontal",
         )
         reminder_parts = VGroup(reminders.frame, reminders.dividers, *reminders.entries)
-        self.region.place(reminders, DL, buff=SMALL_BUFF)
+        screen_region.place(reminders, DL, buff=SMALL_BUFF)
 
         proof_region = self.region.copy()
         proof_region.update(bottom=reminders)
@@ -92,6 +93,7 @@ class GradientDescentModes(Slide):
             identity_equations,
             scale_kwargs={"scaleback": 1 / 2},
         )
+        hessian_scalar.scale(hessian_formula[0].height / hessian_scalar[0].height)
         hessian_scalar.move_to(hessian_formula)
 
         derivation_page = TexPage(
@@ -112,6 +114,10 @@ class GradientDescentModes(Slide):
             page_width=proof_region,
         )
         color_substrings(derivation_page, color_map, probe_class=MathTex)
+        proof_region.scale_and_place(
+            derivation_page,
+            scale_kwargs={"max_scale": 1},
+        )
         derivation_lines = tuple(remove_invisible_chars(line) for line in derivation_page.lines)
         derivation_equations = tuple(
             remove_invisible_chars(equation) for equation in derivation_page.equations
@@ -341,10 +347,11 @@ class GradientDescentModes(Slide):
             iteration_bound,
         ).arrange(DOWN)
         _color_text_parts(rate_summary, color_map)
-        rate_summary_region.fit_and_place(
-            rate_summary
+        rate_summary_region.scale_and_place(
+            rate_summary,
+            scale_kwargs={"max_scale": 1},
         )
-        self.play(Unwrite(left_figure))
+        self.play(FadeOut(left_figure))
         self.play(Write(balance_condition), Write(rho_star))
         self.next_slide()
         self.play(Write(convergence_bound), Write(iteration_bound))

@@ -87,3 +87,4 @@ class AdaGradCoordinateResponse(Slide):
         self.play(Write(charts[1]))
         self.fragment(title="AdaGrad normalization")
         self.play(Write(charts[2]), Write(equations))
+        self.clear_scene()
