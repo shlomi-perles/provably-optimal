@@ -313,59 +313,40 @@ class GradientDescentModes(Slide):
 
         self.next_slide()
 
-        left_figure.generate_target()
-        left_figure.target.scale(1 / 2)
-        figure_region.place(left_figure.target, DL, buff=SMALL_BUFF)
-        left_target_frame = left_figure.target[0][3]
-        left_figure.target.shift(RIGHT * (title.get_left()[0] - left_target_frame.get_left()[0]))
-        equations_region.update(bottom=left_figure.target)
         rate_summary_region = equations_region.copy()
         rate_summary_region.update(top=compact_mode_sum)
 
         balance_condition = theme_math(
             r"\begin{gathered}"
-            r"1-\eta\alpha=\eta\beta-1\\"
+            r"|1-\eta\alpha|=|1-\eta\beta|\\"
             r"\eta^\star=\frac{2}{\alpha+\beta}"
             r"\end{gathered}",
-            typography="caption",
         )
         rho_star = theme_math(
             r"\rho_\star^{\mathrm{GD}}"
             r"=1-\frac{2}{\kappa+1}",
-            typography="caption",
         )
         convergence_bound = theme_math(
-            r"\begin{gathered}"
             r"f(x_t)-f_\star\le"
             r"(\rho_\star^{\mathrm{GD}})^{2t}"
-            r"\\"
-            r"\bigl(f(x_0)-f_\star\bigr)"
-            r"\end{gathered}",
-            typography="caption",
+            r"\left(f(x_0)-f_\star\right)"
         )
         iteration_bound = theme_math(
             r"t=O\left(\kappa\log(1/\epsilon)\right)",
-            typography="caption",
         )
         rate_summary = VGroup(
             balance_condition,
             rho_star,
             convergence_bound,
             iteration_bound,
-        ).arrange(RIGHT, aligned_edge=UP, buff=SMALL_BUFF)
+        ).arrange(DOWN)
         _color_text_parts(rate_summary, color_map)
-        rate_summary_region.scale_and_place(
-            rate_summary,
-            UL,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
+        rate_summary_region.fit_and_place(
+            rate_summary
         )
-        self.play(MoveToTarget(left_figure))
-        self.play(Write(balance_condition))
-        self.play(Write(rho_star))
-        self.play(Write(convergence_bound))
-        self.play(Write(iteration_bound))
+        self.play(Unwrite(left_figure))
+        self.play(Write(balance_condition), Write(rho_star))
         self.next_slide()
-
+        self.play(Write(convergence_bound), Write(iteration_bound))
+        self.next_slide()
         self.clear_scene()
-        self.next_slide()

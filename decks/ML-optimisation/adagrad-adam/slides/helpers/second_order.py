@@ -148,18 +148,18 @@ def zoom_scale_for(x_star: float, x_t: float, sweep_x: float) -> float:
 
 def calibration_domain(x_star: float, x_t: float) -> tuple[FloatArray, tuple[float, ...], float]:
     x_min, x_max, _ = LOCAL_X_RANGE
-    alpha_sweep_x = float(x_star + 2 * abs(x_star - x_t))
-    beta_sweep_x = float(x_star + abs(x_star - x_t))
-    zoom_out_scale = zoom_scale_for(x_star, x_t, max(alpha_sweep_x, beta_sweep_x))
+    calibration_alpha_x = float(x_star + 2 * abs(x_star - x_t))
+    calibration_beta_x = float(x_star + abs(x_star - x_t))
+    zoom_out_scale = zoom_scale_for(x_star, x_t, max(calibration_alpha_x, calibration_beta_x))
     zoom_x_span = (x_max - x_min) * zoom_out_scale
     zoom_x_min = x_star - (x_star - x_min) / (x_max - x_min) * zoom_x_span
     zoom_x_max = zoom_x_min + zoom_x_span
     domain = np.linspace(
-        min(x_min, zoom_x_min, x_t, alpha_sweep_x, beta_sweep_x),
-        max(x_max, zoom_x_max, x_t, alpha_sweep_x, beta_sweep_x),
+        min(x_min, zoom_x_min, x_t, calibration_alpha_x, calibration_beta_x),
+        max(x_max, zoom_x_max, x_t, calibration_alpha_x, calibration_beta_x),
         LOCAL_CURVE_SAMPLES,
     )
-    return domain, (x_t, alpha_sweep_x, beta_sweep_x), zoom_out_scale
+    return domain, (x_t, calibration_alpha_x, calibration_beta_x), zoom_out_scale
 
 
 def curvature_targets(x_star: float, x_t: float) -> tuple[float, float, float]:
@@ -231,6 +231,10 @@ def second_order_data() -> SecondOrderData:
     y_next = float(quadratic_model(np.array([x_next]), x_t, h_t)[0])
     x_star = minimum_x()
     f_star = objective_value(x_star)
+    sweep_offset = 0.2 * abs(x_star - x_t)
+    alpha_sweep_x = float(x_star + sweep_offset)
+    beta_sweep_x = float(x_star + sweep_offset)
+    beta_left_sweep_x = x_t - 0.2
     alpha_target, beta_target, calibration_zoom = curvature_targets(x_star, x_t)
     y_min, y_max = axis_y_range(x_t, f_t, g_t, h_t, alpha_target, beta_target)
     x_min, x_max, x_step = LOCAL_X_RANGE
@@ -250,9 +254,9 @@ def second_order_data() -> SecondOrderData:
         y_max=y_max,
         alpha_target=alpha_target,
         beta_target=beta_target,
-        alpha_sweep_x=float(x_star + 5),
-        beta_sweep_x=float(x_star + 8),
-        beta_left_sweep_x=x_t - 3,
+        alpha_sweep_x=alpha_sweep_x,
+        beta_sweep_x=beta_sweep_x,
+        beta_left_sweep_x=beta_left_sweep_x,
         zoom_out_scale=2 * calibration_zoom,
     )
 

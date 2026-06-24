@@ -249,5 +249,7 @@ def color_text_parts(mobject: VMobject, colors: dict[str, str]) -> None:
         color_substrings(mobject, colors)
         return
     for child in mobject.submobjects:
-        if isinstance(child, VMobject):
-            color_text_parts(child, colors)
+        if child.__class__ is MathTex:
+            color_substrings(child, colors)
+        # if isinstance(child, VMobject):
+            # color_text_parts(child, colors)
