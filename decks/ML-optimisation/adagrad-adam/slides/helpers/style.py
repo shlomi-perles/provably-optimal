@@ -131,9 +131,9 @@ def escape_tex_text(text: str) -> str:
 
 
 def start_slide(scene: Slide, title: str) -> Title:
-    scene.slide(title=title)
+    # scene.slide(title=title)
     title_mob = Title(title)
-    scene.region.place(title_mob, UP)
+    # scene.region.place(title_mob, UP)
     scene.region.update(top=title_mob)
     return title_mob
 

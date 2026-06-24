@@ -110,31 +110,28 @@ class GradientDescentModes(Slide):
             r"x_{t+1}-x^\star=(I-\eta A)^{t+1}(x_0-x^\star)."
             r"\]"
             r"Now use the eigenbasis. Since $A v_i=\lambda_i v_i$ and "
-            r"$x_0-x^\star=\sum_i\alpha_i v_i$,",
+            r"$x_0-x^\star=\sum_i\alpha_i v_i$, ",
+            r"\["
+            r"x_{t+1}-x^\star"
+            r"=\sum_{i=1}^n(1-\eta\lambda_i)^{t+1}\alpha_i v_i"
+            r"\]",
+            r"\["
+            r"f(x_t)-f_\star"
+            r"=\frac{1}{2}\sum_{i=1}^n"
+            r"\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}"
+            r"\]",
             page_width=proof_region,
         )
         color_substrings(derivation_page, color_map, probe_class=MathTex)
-        proof_region.scale_and_place(
-            derivation_page,
-            scale_kwargs={"max_scale": 1},
-        )
+        derivation_page.equations[-1].next_to(derivation_page.equations[-2], DOWN, buff=SMALL_BUFF)
+        proof_region.place(derivation_page)
         derivation_lines = tuple(remove_invisible_chars(line) for line in derivation_page.lines)
         derivation_equations = tuple(
             remove_invisible_chars(equation) for equation in derivation_page.equations
         )
-        mode_position_equation = theme_math(
-            r"x_{t+1}-x^\star"
-            r"=\sum_{i=1}^n(1-\eta\lambda_i)^{t+1}\alpha_i v_i",
-        )
-        mode_value_equation = theme_math(
-            r"f(x_t)-f_\star"
-            r"=\frac{1}{2}\sum_{i=1}^n"
-            r"\lambda_i\alpha_i^2(1-\eta\lambda_i)^{2t}",
-        )
-        mode_equations = VGroup(mode_position_equation, mode_value_equation).arrange(DOWN)
-        _color_text_parts(mode_equations, color_map)
-        mode_equations.next_to(derivation_lines[-1], DOWN)
-        mode_equations.set_x(derivation_page.get_x())
+        mode_position_equation = derivation_page.equations[-2]
+        mode_value_equation = derivation_page.equations[-1]
+        mode_equations = VGroup(mode_position_equation, mode_value_equation)
         derivation_to_unwrite = VGroup(*derivation_lines, *derivation_equations)
         gd_mode_sum_frame = SurroundingRectangle(
             mode_equations,
@@ -255,11 +252,9 @@ class GradientDescentModes(Slide):
         compact_equations_region.update(
             right=reminders.target.get_left() + LEFT * SMALL_BUFF
         )
-        compact_mode_sum = mode_equations.copy().arrange(DOWN, aligned_edge=LEFT)
+        compact_mode_sum = mode_equations.copy().arrange(DOWN, buff=SMALL_BUFF)
         compact_equations_region.scale_and_place(
             compact_mode_sum,
-            buff=SMALL_BUFF,
-            scale_kwargs={"max_scale": 1},
         )
         self.play(
             Unwrite(derivation_to_unwrite),
